@@ -2,6 +2,8 @@
 - **OK** Fix
 - **OK** Turnpoint
 - Task info
+  - **OK** Make structs
+  - Implement functionality
 - Pilot info
 ### Calculations (target: 1 mar)
 

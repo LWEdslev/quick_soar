@@ -11,22 +11,9 @@ pub struct Fix {
 
 impl Fix {
     fn from(rec: &BRecord) -> Self {
-        let (lat, lon) = (rec.pos.lat.0, rec.pos.lon.0);
-        let (lat, lon) = (lat.degrees as f32 + (lat.minute_thousandths as f32 / 1000.) / 60.,
-                          lon.degrees as f32 + (lon.minute_thousandths as f32 / 1000.) / 60.);
-        let lat = match rec.pos.lat.0.sign {
-            Compass::North => lat,
-            Compass::South => -1. * lat,
-            _ => panic!("latitude was neither north nor south")
-        };
-        let lon = match rec.pos.lon.0.sign {
-            Compass::East => lon,
-            Compass::West => -1. * lon,
-            _ => panic!("longitude was neither east nor west")
-        };
+        let (lat, lon) = raw_position_to_decimals(&rec.pos);
         let time = &rec.timestamp;
         let (h,m,s) = (time.hours, time.minutes, time.seconds);
-
         Self {
             timestamp: Time::from_hms(h,m,s),
             latitude: lat,
