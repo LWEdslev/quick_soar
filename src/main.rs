@@ -4,11 +4,11 @@ use crate::file_handling::igc_parser;
 mod file_handling;
 
 fn main() {
-    println!("start");
     let start = time::Instant::now();
-    let fixes = igc_parser::get_fixes(igc_parser::get_contents("examples/example.igc").unwrap());
-    for fix in fixes {
-        println!("\t{}", fix.to_string());
+    let c_records = igc_parser::get_turnpoints(igc_parser::get_contents("examples/example.igc").unwrap());
+    println!("{}", c_records.len());
+    for c in c_records {
+        println!("\t{}", c.to_string());
     }
     println!("{} ms since start", start.elapsed().as_millis());
 }
