@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 igc = "0.2.2"
+regex = "1.7.1"

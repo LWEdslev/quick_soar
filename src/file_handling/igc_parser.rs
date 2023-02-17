@@ -32,14 +32,14 @@ impl Fix {
     }
 }
 
-pub struct Turnpoint {
+pub struct TurnpointLocation {
     latitude: f32,
     longitude: f32,
     name: Option<String>,
 }
 
-impl Turnpoint {
-    fn from(rec: CRecordTurnpoint) -> Self {
+impl TurnpointLocation {
+    pub(crate) fn from_c_record_tp(rec: &CRecordTurnpoint) -> Self {
         let (latitude, longitude) = raw_position_to_decimals(&rec.position);
         let name = match rec.turnpoint_name {
             Some(s) => Some(s.to_string()),
@@ -99,14 +99,14 @@ fn get_l_records_strings(contents: String) -> Vec<String> {
     map_parsed_contents(contents, f)
 }
 
-pub fn get_turnpoints(contents: String) -> Vec<Turnpoint> {
+pub fn get_turnpoints(contents: String) -> Vec<TurnpointLocation> {
 
-    fn get_turnpoints_from_l_records(tp_strings: Vec<String>) -> Vec<Turnpoint>{
+    fn get_turnpoints_from_l_records(tp_strings: Vec<String>) -> Vec<TurnpointLocation>{
         tp_strings
             .iter()
             .filter_map(|tp| match Record::parse_line(tp) {
                 Ok(record) => match record {
-                    Record::CTurnpoint(c) => Some(Turnpoint::from(c)),
+                    Record::CTurnpoint(c) => Some(TurnpointLocation::from_c_record_tp(&c)),
                     _ => None,
                 },
                 Err(_) => None,
