@@ -68,7 +68,7 @@ pub fn get_contents(path: &str) -> Result<String, Box<dyn Error>> {
 /// Takes contents converts it to `Vec<Record>` and maps it according to `f`
 /// # Panics
 /// Panics if line in contents is unable to parse
-fn map_parsed_contents<F,T>(contents: String, f: F) -> T
+fn map_parsed_contents<F,T>(contents: &str, f: F) -> T
     where F: FnOnce(&Vec<Record>) -> T
 {
     let records: Vec<Record> = contents.lines().map(
@@ -79,7 +79,7 @@ fn map_parsed_contents<F,T>(contents: String, f: F) -> T
     f(&records)
 }
 
-pub fn get_fixes(contents: String) -> Vec<Fix> {
+pub fn get_fixes(contents: &str) -> Vec<Fix> {
     let f = |records: &Vec<Record>| records.iter().filter_map( |record|
         match record {
             Record::B(brecord) => Some(Fix::from(&brecord)),
@@ -96,10 +96,10 @@ fn get_l_records_strings(contents: String) -> Vec<String> {
             _ => None,
         }
     ).collect::<Vec<String>>();
-    map_parsed_contents(contents, f)
+    map_parsed_contents(&*contents, f)
 }
 
-pub fn get_turnpoints(contents: String) -> Vec<TurnpointLocation> {
+pub fn get_turnpoints(contents: &str) -> Vec<TurnpointLocation> {
 
     fn get_turnpoints_from_l_records(tp_strings: Vec<String>) -> Vec<TurnpointLocation>{
         tp_strings
@@ -115,7 +115,7 @@ pub fn get_turnpoints(contents: String) -> Vec<TurnpointLocation> {
             .collect()
     }
 
-    let c_record_candidate = get_l_records_strings(contents)
+    let c_record_candidate = get_l_records_strings(contents.to_string())
         .into_iter()
         .map(|s| s.replacen("CU::", "", 1))
         .collect::<Vec<String>>();

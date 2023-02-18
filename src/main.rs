@@ -5,7 +5,7 @@ mod file_handling;
 
 fn main() {
     let start = time::Instant::now();
-    let c_records = igc_parser::get_turnpoints(igc_parser::get_contents("examples/example.igc").unwrap());
+    let c_records = igc_parser::get_turnpoints(igc_parser::get_contents("examples/example.igc").unwrap().as_str());
     println!("{}", c_records.len());
     for c in c_records {
         println!("\t{}", c.to_string());
