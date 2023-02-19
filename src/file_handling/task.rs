@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn task_type_and_start_is_parsed_correctly() {
-        let contents = igc_parser::get_contents("examples/example.igc").unwrap();
+        let contents = igc_parser::get_contents("examples/ast.igc").unwrap();
         let task = Task::parse(&*contents).unwrap();
         let tps = task.points;
         match task.task_type {

@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn no_time_from_ast() {
         assert_eq!(
-            get_task_time(get_contents("examples/example.igc").unwrap().as_str()),
+            get_task_time(get_contents("examples/ast.igc").unwrap().as_str()),
             None
         )
     }
