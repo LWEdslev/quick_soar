@@ -1,8 +1,8 @@
 use std::error::Error;
 use igc::util::Time;
 use regex::Regex;
-use crate::file_handling::igc_parser;
-use crate::file_handling::igc_parser::TurnpointLocation;
+use crate::parser::igc_parser;
+use crate::parser::igc_parser::TurnpointLocation;
 
 enum DescriptionElem {
     R1, R2, A1, A2, Style, AAT,
@@ -163,7 +163,7 @@ impl Task {
 #[cfg(test)]
 
 mod tests {
-    use crate::file_handling::igc_parser::get_turnpoint_locations;
+    use crate::parser::igc_parser::get_turnpoint_locations;
     use super::*;
 
     #[test]

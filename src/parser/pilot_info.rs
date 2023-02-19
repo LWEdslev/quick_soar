@@ -50,7 +50,7 @@ impl PilotElem {
 #[cfg(test)]
 
 mod tests {
-    use crate::file_handling::igc_parser;
+    use crate::parser::igc_parser;
     use super::*;
 
     #[test]

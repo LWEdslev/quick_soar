@@ -1,7 +1,7 @@
 use std::time;
-use crate::file_handling::igc_parser;
+use crate::parser::igc_parser;
 
-mod file_handling;
+mod parser;
 
 fn main() {
     let start = time::Instant::now();
