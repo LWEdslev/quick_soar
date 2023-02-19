@@ -1,10 +1,11 @@
 use std::error::Error;
 use igc::util::Time;
 use regex::Regex;
+use crate::file_handling::igc_parser;
 use crate::file_handling::igc_parser::TurnpointLocation;
 
 enum DescriptionElem {
-    R1, R2, A1, A2, Style,
+    R1, R2, A1, A2, Style, AAT,
 }
 
 impl DescriptionElem {
@@ -15,6 +16,7 @@ impl DescriptionElem {
             DescriptionElem::A1 => ("A1=", ","),
             DescriptionElem::A2 => ("A2=", ","),
             DescriptionElem::Style => (",Style=", ","),
+            DescriptionElem::AAT => ("AAT=", ""),
         };
 
         let regex = Regex::new(format!("{start}[0-9]+{end}").as_str()).unwrap();
@@ -38,12 +40,21 @@ impl TaskComponent {
         let style = DescriptionElem::Style.get_element(description);
         let tp = Turnpoint::parse(description, loc);
         match style {
-            Some(2) => Self::Start(tp),//start
+            Some(2) => Self::Start(tp),
             Some(1) => Self::Tp(tp),
             Some(3) => Self::Finish(tp),
             None => panic!("style param not found in {description}"),
-            _ => panic!("style was parsed to unkown number not in (1,2,3), {description}"),
+            _ => panic!("style was parsed to unknown number not in (1,2,3), {description}"),
         }
+    }
+
+    fn is_aat(&self) -> bool {
+        let tp = match self {
+            TaskComponent::Tp(tp) => tp,
+            TaskComponent::Start(tp) => tp,
+            TaskComponent::Finish(tp) => tp,
+        };
+        tp.aat
     }
 }
 
@@ -53,6 +64,7 @@ pub struct Turnpoint {
     a1: u16,
     r2: u16,
     a2: u16,
+    aat: bool,
 }
 
 impl Turnpoint {
@@ -61,12 +73,14 @@ impl Turnpoint {
         let a1 = DescriptionElem::A1.get_element(description).unwrap();
         let r2 = DescriptionElem::R2.get_element(description).unwrap();
         let a2 = DescriptionElem::A2.get_element(description).unwrap();
+        let aat = DescriptionElem::AAT.get_element(description).is_some();
         Self {
             loc,
             r1,
             a1,
             r2,
             a2,
+            aat,
         }
     }
 }
@@ -82,22 +96,82 @@ enum TaskType {
     AST,
 }
 
+#[derive(Debug)]
+enum TaskError {
+    NoStart,
+    NoFinish,
+    NoTurnpoints,
+    NotSameAmountOfDescriptionsAsTurnpoints,
+}
+
 impl Task {
-    //TODO
+    fn parse(contents: &str) -> Result<Self, TaskError> {
+        //the contents should be split into parts so there is not many unnecessary run through O(3n) -> O(n)
+        let tps = igc_parser::get_turnpoint_locations(contents);
+        let descriptions = igc_parser::get_turnpoint_descriptions(contents);
+        let task_time = igc_parser::get_task_time(contents);
+        if tps.len() != descriptions.len() { return Err(TaskError::NotSameAmountOfDescriptionsAsTurnpoints) };
+        let points = tps.into_iter().zip(descriptions).map(|(tpl, desc)| {
+            TaskComponent::parse(&*desc, tpl)
+        }).collect::<Vec<TaskComponent>>();
+
+        if points.len() < 3 { return Err(TaskError::NoTurnpoints) };
+
+        match points.first() { //Checks if there is a turnpoint and if the first one is start
+            Some(p) => match p {
+                TaskComponent::Start(_) => {},
+                _ => return Err(TaskError::NoStart)
+            },
+            None => return Err(TaskError::NoTurnpoints),
+        }
+
+        match points.last() { //checks if the last one is a finish
+            Some(p) => match p {
+                TaskComponent::Finish(_) => {},
+                _ => return Err(TaskError::NoFinish)
+            },
+            None => return Err(TaskError::NoTurnpoints),
+        }
+
+        for i in &points[1..points.len()-2] { //checks if all points except first and last, are turnpoints
+            match i {
+                TaskComponent::Tp(_) => {}
+                _ => return Err(TaskError::NoTurnpoints),
+            }
+        }
+
+        let task_type = match points.get(1).unwrap().is_aat() {
+            true => {
+                match task_time {
+                    None => TaskType::AST,
+                    Some(time) => TaskType::AAT(time),
+                }
+            }
+            false => TaskType::AST,
+        };
+
+
+        Ok(
+            Self {
+                points,
+                task_type,
+            }
+        )
+    }
 }
 
 #[cfg(test)]
 
 mod tests {
-    use crate::file_handling::igc_parser::get_turnpoints;
+    use crate::file_handling::igc_parser::get_turnpoint_locations;
     use super::*;
 
     #[test]
     fn task_component_tp_parsing() {
 
-        let mut turnpoint = get_turnpoints("LCU::C5624583N00924583E0005ViborgFlp");
+        let mut turnpoint = get_turnpoint_locations("LCU::C5624583N00924583E0005ViborgFlp");
         if let TaskComponent::Tp(comp) = TaskComponent::parse(
-            "SEEYOU OZ=2,Style=1,SpeedStyle=1,R1=500m,A1=180,R2=0m,A2=0,MaxAlt=0.0m",
+            "LSEEYOU OZ=2,Style=1,SpeedStyle=1,R1=500m,A1=180,R2=0m,A2=0,MaxAlt=0.0m",
             turnpoint.remove(0)) {
             assert_eq!(comp.r1, 500);
             assert_eq!(comp.a1, 180);
@@ -110,9 +184,9 @@ mod tests {
 
     #[test]
     fn task_component_start_parsing() {
-        let mut turnpoint = get_turnpoints("LCU::C5600500N00906683E0047FasterholtBanX");
+        let mut turnpoint = get_turnpoint_locations("LCU::C5600500N00906683E0047FasterholtBanX");
         if let TaskComponent::Start(comp) = TaskComponent::parse(
-            "SEEYOU OZ=-1,Style=2,SpeedStyle=0,R1=5000m,A1=180,R2=0m,A2=0,MaxAlt=0.0m,Line=1",
+            "LSEEYOU OZ=-1,Style=2,SpeedStyle=0,R1=5000m,A1=180,R2=0m,A2=0,MaxAlt=0.0m,Line=1",
             turnpoint.remove(0)) {
             assert_eq!(comp.r1, 5000);
             assert_eq!(comp.a1, 180);
@@ -125,9 +199,9 @@ mod tests {
 
     #[test]
     fn task_component_finish_parsing() {
-        let mut turnpoint = get_turnpoints("LCU::C5600633N00900867E0851ArnborgFlp");
+        let mut turnpoint = get_turnpoint_locations("LCU::C5600633N00900867E0851ArnborgFlp");
         if let TaskComponent::Finish(comp) = TaskComponent::parse(
-            "SEEYOU OZ=5,Style=3,SpeedStyle=2,R1=3000m,A1=180,R2=0m,A2=0,MaxAlt=0.0m,Reduce=1",
+            "LSEEYOU OZ=5,Style=3,SpeedStyle=2,R1=3000m,A1=180,R2=0m,A2=0,MaxAlt=0.0m,Reduce=1",
             turnpoint.remove(0)) {
             assert_eq!(comp.r1, 3000);
             assert_eq!(comp.a1, 180);
@@ -136,5 +210,23 @@ mod tests {
         } else {
             assert!(false);
         };
+    }
+
+    #[test]
+    fn task_type_and_start_is_parsed_correctly() {
+        let contents = igc_parser::get_contents("examples/example.igc").unwrap();
+        let task = Task::parse(&*contents).unwrap();
+        let tps = task.points;
+        match task.task_type {
+            TaskType::AST => {},
+            TaskType::AAT(_) => assert!(false),
+        }
+        if let Some(TaskComponent::Start(tp)) = tps.first() {
+            if let Some(name) = &tp.loc.name {
+                assert_eq!(name.clone(), "0047FasterholtBanX".to_string())
+            }
+        } else {
+            assert!(false)
+        }
     }
 }

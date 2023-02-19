@@ -1,5 +1,7 @@
 use std::{error::Error, fs::File, io::Read};
+use std::str::FromStr;
 use igc::{records::{BRecord, CRecordTurnpoint, Record}, util::{Compass, RawPosition, Time}};
+use regex::{Match, Regex};
 
 
 pub struct Fix {
@@ -33,9 +35,9 @@ impl Fix {
 }
 
 pub struct TurnpointLocation {
-    latitude: f32,
-    longitude: f32,
-    name: Option<String>,
+    pub latitude: f32,
+    pub longitude: f32,
+    pub name: Option<String>,
 }
 
 impl TurnpointLocation {
@@ -92,14 +94,14 @@ pub fn get_fixes(contents: &str) -> Vec<Fix> {
 fn get_l_records_strings(contents: String) -> Vec<String> {
     let f = |records: &Vec<Record>| records.iter().filter_map( |record|
         match record {
-            Record::L(lrecord) => Some(lrecord.log_string.to_string()),
+            Record::L(lrecord) => Some("L".to_string() + lrecord.log_string), //add the L again
             _ => None,
         }
     ).collect::<Vec<String>>();
     map_parsed_contents(&*contents, f)
 }
 
-pub fn get_turnpoints(contents: &str) -> Vec<TurnpointLocation> {
+pub fn get_turnpoint_locations(contents: &str) -> Vec<TurnpointLocation> {
 
     fn get_turnpoints_from_l_records(tp_strings: Vec<String>) -> Vec<TurnpointLocation>{
         tp_strings
@@ -117,12 +119,58 @@ pub fn get_turnpoints(contents: &str) -> Vec<TurnpointLocation> {
 
     let c_record_candidate = get_l_records_strings(contents.to_string())
         .into_iter()
-        .map(|s| s.replacen("CU::", "", 1))
+        .filter(|s| s.starts_with("LCU::C"))
+        .map(|s| s.replacen("LCU::", "", 1))
         .collect::<Vec<String>>();
     get_turnpoints_from_l_records(c_record_candidate)
 }
 
+pub fn get_task_time(contents: &str) -> Option<Time> {
+    let f = |records: &Vec<Record>| records.iter().filter_map( |record|
+        match record {
+            Record::L(lrecord) =>
+                if lrecord.log_string.starts_with("SEEYOU TSK") {
+                    Some("L".to_string() + lrecord.log_string)
+                } else {
+                    None
+                },
+            _ => None,
+        }).collect::<Vec<String>>();
+    let task_string = map_parsed_contents(&*contents, f);
+    assert_eq!(task_string.len(), 1);
 
+    match task_string.first() {
+        Some(s) => {
+            let regex = Regex::new("TaskTime=[0-9][0-9]:[0-9][0-9]:[0-9][0-9]").unwrap();
+            let matc = regex.find(s);
+
+            match matc {
+                None => None,
+                Some(matc) => {
+                    let time_string = &s[matc.start()+"TaskTime=".len() .. matc.end()].to_string();
+                    Some(
+                        Time::from_str(&*time_string.replacen(":", "", 3)).unwrap()
+                    )
+                },
+            }
+        },
+        None => None,
+    }
+}
+
+pub fn get_turnpoint_descriptions(contents: &str) -> Vec<String> {
+    let f = |records: &Vec<Record>| records.iter().filter_map( |record|
+        match record {
+            Record::L(lrecord) =>
+                if lrecord.log_string.starts_with("SEEYOU OZ=") {
+                    Some("L".to_string() + lrecord.log_string)
+                } else {
+                    None
+                },
+            _ => None,
+        }).collect::<Vec<String>>();
+    map_parsed_contents(contents, f)
+}
 
 type Lat = f32;
 type Lon = f32;
@@ -159,5 +207,22 @@ mod tests {
         } else {
             assert!(false)
         };
+    }
+
+    #[test]
+    fn getting_time() {
+        if let Some(time) = get_task_time("LSEEYOU TSK,NoStart=12:57:00,TaskTime=02:00:00,WpDis=False") {
+            assert_eq!(time, Time::from_hms(2, 0, 0))
+        } else {
+            assert!(false)
+        }
+    }
+
+    #[test]
+    fn no_time_from_ast() {
+        assert_eq!(
+            get_task_time(get_contents("examples/example.igc").unwrap().as_str()),
+            None
+        )
     }
 }
