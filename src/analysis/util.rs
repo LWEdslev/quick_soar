@@ -1,3 +1,4 @@
+use igc::util::Time;
 use crate::parser::task::Turnpoint;
 use crate::parser::util::Fix;
 
@@ -72,11 +73,23 @@ pub fn quick_bearing_change(prev_bearing: Degrees, second: &Fix, last: &Fix) -> 
     }
 }
 
+trait Offsetable {
+    fn offset(&mut self, offset: i8);
+}
+
+impl Offsetable for Time {
+    fn offset(&mut self, offset: i8) {
+        let h = self.hours as i8 + offset;
+        self.hours = if h >= 24 { (h - 24) as u8 } else { h as u8 }
+    }
+}
+
 #[cfg(test)]
 
 mod tests {
     use igc::records::{BRecord, CRecordTurnpoint, Record};
     use igc::util::Time;
+    use crate::parser;
     use crate::parser::util::TurnpointRecord;
     use super::*;
 
@@ -180,5 +193,20 @@ mod tests {
         let fix3 = Fix::from(&BRecord::parse("B1246305639371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
 
         assert_eq!(bearing_change(&fix1, &fix2, &fix3).round(), 90.)
+    }
+
+    #[test]
+    fn positive_timezone() {
+        let contents = parser::util::get_contents("examples/ast.igc").unwrap();
+        let pilot_info = parser::pilot_info::PilotInfo::parse(&contents);
+        let mut time = Time::from_hms(10, 43, 56);
+        time.offset(pilot_info.time_zone);
+        assert_eq!(pilot_info.time_zone, 2);
+        assert_eq!(time, Time::from_hms(12, 43, 56));
+    }
+
+    #[test]
+    fn negative_timezone() {
+
     }
 }
