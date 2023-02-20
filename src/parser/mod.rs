@@ -1,3 +1,3 @@
-pub mod igc_parser;
+pub mod util;
 mod task;
 mod pilot_info;

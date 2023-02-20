@@ -1,8 +1,8 @@
 use std::error::Error;
 use igc::util::Time;
 use regex::Regex;
-use crate::parser::igc_parser;
-use crate::parser::igc_parser::TurnpointLocation;
+use crate::parser::util;
+use crate::parser::util::TurnpointLocation;
 
 enum DescriptionElem {
     R1, R2, A1, A2, Style, AAT,
@@ -107,9 +107,9 @@ enum TaskError {
 impl Task {
     fn parse(contents: &str) -> Result<Self, TaskError> {
         //the contents should be split into parts so there is not many unnecessary run through O(3n) -> O(n)
-        let tps = igc_parser::get_turnpoint_locations(contents);
-        let descriptions = igc_parser::get_turnpoint_descriptions(contents);
-        let task_time = igc_parser::get_task_time(contents);
+        let tps = util::get_turnpoint_locations(contents);
+        let descriptions = util::get_turnpoint_descriptions(contents);
+        let task_time = util::get_task_time(contents);
         if tps.len() != descriptions.len() { return Err(TaskError::NotSameAmountOfDescriptionsAsTurnpoints) };
         let points = tps.into_iter().zip(descriptions).map(|(tpl, desc)| {
             TaskComponent::parse(&*desc, tpl)
@@ -163,7 +163,7 @@ impl Task {
 #[cfg(test)]
 
 mod tests {
-    use crate::parser::igc_parser::get_turnpoint_locations;
+    use crate::parser::util::get_turnpoint_locations;
     use super::*;
 
     #[test]
@@ -213,8 +213,8 @@ mod tests {
     }
 
     #[test]
-    fn task_type_and_start_is_parsed_correctly() {
-        let contents = igc_parser::get_contents("examples/ast.igc").unwrap();
+    fn ast_task_type_and_start_is_parsed_correctly() {
+        let contents = util::get_contents("examples/ast.igc").unwrap();
         let task = Task::parse(&*contents).unwrap();
         let tps = task.points;
         match task.task_type {
@@ -224,6 +224,24 @@ mod tests {
         if let Some(TaskComponent::Start(tp)) = tps.first() {
             if let Some(name) = &tp.loc.name {
                 assert_eq!(name.clone(), "0047FasterholtBanX".to_string())
+            }
+        } else {
+            assert!(false)
+        }
+    }
+
+    #[test]
+    fn aat_task_type_and_start_is_parsed_correctly() {
+        let contents = util::get_contents("examples/aat.igc").unwrap();
+        let task = Task::parse(&*contents).unwrap();
+        let tps = task.points;
+        match task.task_type {
+            TaskType::AAT(time) => assert_eq!(time, Time::from_hms(2, 0, 0)),
+            TaskType::AST => assert!(false),
+        }
+        if let Some(TaskComponent::Start(tp)) = tps.first() {
+            if let Some(name) = &tp.loc.name {
+                assert_eq!(name.clone(), "265Silas".to_string())
             }
         } else {
             assert!(false)

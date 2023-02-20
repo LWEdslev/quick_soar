@@ -50,12 +50,12 @@ impl PilotElem {
 #[cfg(test)]
 
 mod tests {
-    use crate::parser::igc_parser;
+    use crate::parser::util;
     use super::*;
 
     #[test]
     fn pilot_info_ast_parsing() {
-        let contents = igc_parser::get_contents("examples/ast.igc").unwrap();
+        let contents = util::get_contents("examples/ast.igc").unwrap();
         let pilot_info = PilotInfo::parse(&contents);
         assert_eq!(pilot_info.comp_id, "KE");
         assert_eq!(pilot_info.time_zone, 2);

@@ -3,8 +3,8 @@
 - **OK** Turnpoint
 - Task info
   - **OK** Make structs
-  - Implement functionality
-- Pilot info
+  - **OK** Implement functionality
+- **OK** Pilot info
 ### Calculations (target: 1 mar)
 
 ### Soup (target: 7 mar)
