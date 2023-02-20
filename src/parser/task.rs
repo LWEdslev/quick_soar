@@ -59,18 +59,18 @@ impl TaskComponent {
 }
 
 pub struct Turnpoint {
-    latitude: f32,
-    longitude: f32,
+    pub latitude: f32,
+    pub longitude: f32,
     name: Option<String>,
-    r1: u16,
-    a1: u16,
-    r2: u16,
-    a2: u16,
+    pub r1: u16,
+    pub a1: u16,
+    pub r2: u16,
+    pub a2: u16,
     aat: bool,
 }
 
 impl Turnpoint {
-    fn parse(description: &str, loc: TurnpointRecord) -> Self {
+    pub(crate) fn parse(description: &str, loc: TurnpointRecord) -> Self {
         let r1 = DescriptionElem::R1.get_element(description).unwrap();
         let a1 = DescriptionElem::A1.get_element(description).unwrap();
         let r2 = DescriptionElem::R2.get_element(description).unwrap();

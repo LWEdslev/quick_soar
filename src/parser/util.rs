@@ -7,7 +7,7 @@ use regex::{Match, Regex};
 pub struct Fix {
     pub timestamp: Time,
     pub latitude: f32, //positive is north
-    pub longitude: f32, //positive is east
+    pub longitude: f32, //positive is west
     pub alt: i16,
 }
 
@@ -185,8 +185,8 @@ fn raw_position_to_decimals(rp: &RawPosition) -> (Lat, Lon) {
         _ => panic!("latitude was neither north nor south")
     };
     let lon = match rp.lon.0.sign {
-        Compass::East => lon,
-        Compass::West => -1. * lon,
+        Compass::East => -1. * lon,
+        Compass::West => lon,
         _ => panic!("longitude was neither east nor west")
     };
     (lat, lon)
@@ -202,7 +202,7 @@ mod tests {
             let fix = Fix::from(&brecord);
             assert_eq!(fix.alt, brecord.gps_alt);
             assert_eq!(fix.latitude, 51.869633);
-            assert_eq!(fix.longitude, -0.5459167);
+            assert_eq!(fix.longitude, 0.5459167);
             assert_eq!(fix.timestamp, Time::from_hms(9, 41, 42));
         } else {
             assert!(false)
