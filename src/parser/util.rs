@@ -5,14 +5,14 @@ use regex::{Match, Regex};
 
 
 pub struct Fix {
-    timestamp: Time,
-    latitude: f32, //positive is north
-    longitude: f32, //positive is east
-    alt: i16,
+    pub timestamp: Time,
+    pub latitude: f32, //positive is north
+    pub longitude: f32, //positive is east
+    pub alt: i16,
 }
 
 impl Fix {
-    fn from(rec: &BRecord) -> Self {
+    pub fn from(rec: &BRecord) -> Self {
         let (lat, lon) = raw_position_to_decimals(&rec.pos);
         let time = &rec.timestamp;
         let (h,m,s) = (time.hours, time.minutes, time.seconds);
@@ -34,13 +34,13 @@ impl Fix {
     }
 }
 
-pub struct TurnpointLocation {
+pub struct TurnpointRecord {
     pub latitude: f32,
     pub longitude: f32,
     pub name: Option<String>,
 }
 
-impl TurnpointLocation {
+impl TurnpointRecord {
     pub(crate) fn from_c_record_tp(rec: &CRecordTurnpoint) -> Self {
         let (latitude, longitude) = raw_position_to_decimals(&rec.position);
         let name = match rec.turnpoint_name {
@@ -101,14 +101,14 @@ fn get_l_records_strings(contents: String) -> Vec<String> {
     map_parsed_contents(&*contents, f)
 }
 
-pub fn get_turnpoint_locations(contents: &str) -> Vec<TurnpointLocation> {
+pub fn get_turnpoint_locations(contents: &str) -> Vec<TurnpointRecord> {
 
-    fn get_turnpoints_from_l_records(tp_strings: Vec<String>) -> Vec<TurnpointLocation>{
+    fn get_turnpoints_from_l_records(tp_strings: Vec<String>) -> Vec<TurnpointRecord>{
         tp_strings
             .iter()
             .filter_map(|tp| match Record::parse_line(tp) {
                 Ok(record) => match record {
-                    Record::CTurnpoint(c) => Some(TurnpointLocation::from_c_record_tp(&c)),
+                    Record::CTurnpoint(c) => Some(TurnpointRecord::from_c_record_tp(&c)),
                     _ => None,
                 },
                 Err(_) => None,

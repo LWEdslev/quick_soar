@@ -1,3 +1,3 @@
 pub mod util;
-mod task;
-mod pilot_info;
+pub mod task;
+pub mod pilot_info;

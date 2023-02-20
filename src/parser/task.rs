@@ -2,7 +2,7 @@ use std::error::Error;
 use igc::util::Time;
 use regex::Regex;
 use crate::parser::util;
-use crate::parser::util::TurnpointLocation;
+use crate::parser::util::TurnpointRecord;
 
 enum DescriptionElem {
     R1, R2, A1, A2, Style, AAT,
@@ -36,7 +36,7 @@ pub enum TaskComponent {
 }
 
 impl TaskComponent {
-    fn parse(description: &str, loc: TurnpointLocation) -> Self {
+    fn parse(description: &str, loc: TurnpointRecord) -> Self {
         let style = DescriptionElem::Style.get_element(description);
         let tp = Turnpoint::parse(description, loc);
         match style {
@@ -59,7 +59,9 @@ impl TaskComponent {
 }
 
 pub struct Turnpoint {
-    loc: TurnpointLocation,
+    latitude: f32,
+    longitude: f32,
+    name: Option<String>,
     r1: u16,
     a1: u16,
     r2: u16,
@@ -68,14 +70,16 @@ pub struct Turnpoint {
 }
 
 impl Turnpoint {
-    fn parse(description: &str, loc: TurnpointLocation) -> Self {
+    fn parse(description: &str, loc: TurnpointRecord) -> Self {
         let r1 = DescriptionElem::R1.get_element(description).unwrap();
         let a1 = DescriptionElem::A1.get_element(description).unwrap();
         let r2 = DescriptionElem::R2.get_element(description).unwrap();
         let a2 = DescriptionElem::A2.get_element(description).unwrap();
         let aat = DescriptionElem::AAT.get_element(description).is_some();
         Self {
-            loc,
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            name: loc.name,
             r1,
             a1,
             r2,
@@ -87,17 +91,17 @@ impl Turnpoint {
 
 
 pub struct Task {
-    points: Vec<TaskComponent>,
-    task_type: TaskType,
+    pub points: Vec<TaskComponent>,
+    pub task_type: TaskType,
 }
 
-enum TaskType {
+pub enum TaskType {
     AAT(Time),
     AST,
 }
 
 #[derive(Debug)]
-enum TaskError {
+pub enum TaskError {
     NoStart,
     NoFinish,
     NoTurnpoints,
@@ -105,7 +109,7 @@ enum TaskError {
 }
 
 impl Task {
-    fn parse(contents: &str) -> Result<Self, TaskError> {
+    pub fn parse(contents: &str) -> Result<Self, TaskError> {
         //the contents should be split into parts so there is not many unnecessary run through O(3n) -> O(n)
         let tps = util::get_turnpoint_locations(contents);
         let descriptions = util::get_turnpoint_descriptions(contents);
@@ -222,7 +226,7 @@ mod tests {
             TaskType::AAT(_) => assert!(false),
         }
         if let Some(TaskComponent::Start(tp)) = tps.first() {
-            if let Some(name) = &tp.loc.name {
+            if let Some(name) = &tp.name {
                 assert_eq!(name.clone(), "0047FasterholtBanX".to_string())
             }
         } else {
@@ -240,7 +244,7 @@ mod tests {
             TaskType::AST => assert!(false),
         }
         if let Some(TaskComponent::Start(tp)) = tps.first() {
-            if let Some(name) = &tp.loc.name {
+            if let Some(name) = &tp.name {
                 assert_eq!(name.clone(), "265Silas".to_string())
             }
         } else {

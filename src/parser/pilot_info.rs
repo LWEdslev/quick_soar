@@ -1,13 +1,13 @@
 use regex::Regex;
 
-struct PilotInfo{
-    glider_type: String,
-    comp_id: String,
-    time_zone: i8,
+pub struct PilotInfo{
+    pub glider_type: String,
+    pub comp_id: String,
+    pub time_zone: i8,
 }
 
 impl PilotInfo {
-    fn parse(contents: &str) -> Self {
+    pub fn parse(contents: &str) -> Self {
         let glider_type = PilotElem::GliderType.get_element(
             contents.lines().find(|s| s.trim().starts_with("LCU::HPGTYGLIDERTYPE:")).unwrap()
         );
