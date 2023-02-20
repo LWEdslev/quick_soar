@@ -16,8 +16,8 @@ impl Fix {
     }
 
     fn bearing_to(&self, fix: &Fix) -> Degrees {
-        let delta_lat = self.latitude - fix.latitude;
-        let delta_lon = self.longitude - fix.longitude;
+        let delta_lat = fix.latitude - self.latitude ;
+        let delta_lon = fix.longitude - self.longitude;
         let radians_to_degrees = 57.2957795f32;
         let out = (delta_lat / ( delta_lon * delta_lon + delta_lat * delta_lat).sqrt()).acos()
             * radians_to_degrees * (if delta_lon < 0. {-1.} else {1.}) + (if delta_lon < 0. {360.} else {0.});
@@ -45,6 +45,31 @@ fn distance_between(from: (Lat, Lon), to: (Lat, Lon)) -> Meters {
     let y = lat2 - lat1;
 
     (y*y + x*x).sqrt() * 6371_000.
+}
+
+/// Negative is clockwise.
+/// Positive is counter-clockwise.
+pub fn bearing_change(first: &Fix, second: &Fix, last: &Fix) -> Degrees {
+    let bearing1 = first.bearing_to(&second);
+    quick_bearing_change(bearing1, second, last)
+}
+
+/// Negative is clockwise.
+/// Positive is counter-clockwise.
+pub fn quick_bearing_change(prev_bearing: Degrees, second: &Fix, last: &Fix) -> Degrees {
+    let bearing1 = prev_bearing;
+    let bearing2 = second.bearing_to(&last);
+    let delta =  bearing1 - bearing2;
+
+    if delta.is_nan() { return 0.; };
+
+    if delta > 180. {
+        delta - 360.
+    } else if delta < -180. {
+        delta + 360.
+    } else {
+        delta
+    }
 }
 
 #[cfg(test)]
@@ -96,7 +121,7 @@ mod tests {
     #[test]
     fn bearing_180() {
         let fix1 = Fix::from(&BRecord::parse("B1246305439371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
-        let fix2 = Fix::from(&BRecord::parse("B1246305459371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let fix2 = Fix::from(&BRecord::parse("B1246305429371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
         assert_eq!(fix1.bearing_to(&fix2).round(), 180.);
     }
 
@@ -109,8 +134,8 @@ mod tests {
 
     #[test]
     fn bearing_0() {
-        let fix1 = Fix::from(&BRecord::parse("B1246305439371N02503583EA00040000830070040000000010335-005002460010000100").unwrap());
-        let fix2 = Fix::from(&BRecord::parse("B1246305429371N02503583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let fix1 = Fix::from(&BRecord::parse("B1246305429371N02503583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let fix2 = Fix::from(&BRecord::parse("B1246305439371N02503583EA00040000830070040000000010335-005002460010000100").unwrap());
         assert_eq!(fix1.bearing_to(&fix2).round(), 0.);
     }
 
@@ -119,5 +144,41 @@ mod tests {
         let fix1 = Fix::from(&BRecord::parse("B1246305439371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
         let fix2 = Fix::from(&BRecord::parse("B1246305439371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
         assert!(fix1.bearing_to(&fix2).is_nan());
+    }
+
+    #[test]
+    fn three_bearing_test_90() {
+        let fix1 = Fix::from(&BRecord::parse("B1246305439371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let fix2 = Fix::from(&BRecord::parse("B1246305439371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let fix3 = Fix::from(&BRecord::parse("B1246305339371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
+
+        assert_eq!(bearing_change(&fix1, &fix2, &fix3).round(), 90.)
+    }
+
+    #[test]
+    fn three_bearing_test_minus_90() {
+        let fix1 = Fix::from(&BRecord::parse("B1246305439371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let fix2 = Fix::from(&BRecord::parse("B1246305439371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let fix3 = Fix::from(&BRecord::parse("B1246305339371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
+
+        assert_eq!(bearing_change(&fix3, &fix2, &fix1).round(), -90.)
+    }
+
+    #[test]
+    fn three_bearing_test_0() {
+        let fix1 = Fix::from(&BRecord::parse("B1246305439371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let fix2 = Fix::from(&BRecord::parse("B1246305439371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let fix3 = Fix::from(&BRecord::parse("B1246305339371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
+
+        assert_eq!(bearing_change(&fix1, &fix1, &fix1).round(), 0.)
+    }
+
+    #[test]
+    fn three_bearing_test_over_0_boundary() {
+        let fix1 = Fix::from(&BRecord::parse("B1246305439371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let fix2 = Fix::from(&BRecord::parse("B1246305539371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let fix3 = Fix::from(&BRecord::parse("B1246305639371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
+
+        assert_eq!(bearing_change(&fix1, &fix2, &fix3).round(), 90.)
     }
 }
