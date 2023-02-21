@@ -19,9 +19,8 @@ impl Fix {
     fn bearing_to(&self, fix: &Fix) -> Degrees {
         let delta_lat = fix.latitude - self.latitude ;
         let delta_lon = fix.longitude - self.longitude;
-        let radians_to_degrees = 57.2957795f32;
-        let out = (delta_lat / ( delta_lon * delta_lon + delta_lat * delta_lat).sqrt()).acos()
-            * radians_to_degrees * (if delta_lon < 0. {-1.} else {1.}) + (if delta_lon < 0. {360.} else {0.});
+        let out = (delta_lat / ( delta_lon * delta_lon + delta_lat * delta_lat).sqrt()).acos().to_degrees()
+                    * delta_lon.signum() + (if delta_lon.is_sign_negative() {360.} else {0.});
         out
     }
 }
@@ -38,9 +37,8 @@ type Lat = f32;
 type Lon = f32;
 
 fn distance_between(from: (Lat, Lon), to: (Lat, Lon)) -> Meters {
-    let degrees_to_radians = 0.0174532925f32;
-    let (lat1, lon1) = (from.0 * degrees_to_radians, from.1 * degrees_to_radians);
-    let (lat2, lon2) = (to.0 * degrees_to_radians, to.1 * degrees_to_radians);
+    let (lat1, lon1) = (from.0.to_radians(), from.1.to_radians());
+    let (lat2, lon2) = (to.0.to_radians(), to.1.to_radians());
 
     let x = (lon2 - lon1) * ((lat1 + lat2) / 2.).cos();
     let y = lat2 - lat1;
