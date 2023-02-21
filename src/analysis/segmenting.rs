@@ -1,3 +1,4 @@
+use igc::util::Time;
 use crate::parser::util::Fix;
 use crate::{analysis, parser};
 
@@ -11,8 +12,9 @@ impl Flight {
         let start_alt = fixes.get(0).unwrap().alt;
         let fixes = fixes.into_iter().filter(|f| f.alt > start_alt + 100).collect::<Vec<Fix>>();
 
-        const DEGREE_BOUNDARY: f32 = 140.;  //turn this many degrees in
-        const TIME_WINDOW: u32 = 20;        //this much time
+        const DEGREE_BOUNDARY: f32 = 120.;  //turn this many degrees in
+        const TIME_WINDOW: u32 = 15;        //this much time
+        const THERMAL_TIME_LIMIT: u32 = 45; //time one has to stop thermalling for it to be a glide
         let target = DEGREE_BOUNDARY / TIME_WINDOW as f32;
 
         let mut prev_fix = fixes.get(0).unwrap();
@@ -43,7 +45,23 @@ impl Flight {
                 match buildup_is_glide {
                     true => { //We have just started turning!
                         buildup_is_glide = false;
-                        segments.push(Segment::Glide(buildup.clone()));
+                        let time_of_segment = buildup.last().unwrap().timestamp - buildup.first().unwrap().timestamp;
+                        let segment = if time_of_segment <=  THERMAL_TIME_LIMIT {
+                            let mut prev_segment = match segments.pop() {
+                                None => vec![],
+                                Some(prev_segment) => match prev_segment {
+                                    Segment::Glide(v) => v,
+                                    Segment::Thermal(v) => v,
+                                }
+                            };
+
+                            prev_segment.append(&mut buildup.clone());
+
+                            Segment::Thermal(prev_segment) //We did not stop turning for long enough
+                        } else {
+                            Segment::Glide(buildup.clone())
+                        };
+                        segments.push(segment);
                         buildup.clear();
                     },
                     false => {}, //We are still turning so wait
@@ -54,7 +72,27 @@ impl Flight {
                     true => {}, //We are still going straight!
                     false => { //We just stopped turning!
                         buildup_is_glide = true;
-                        segments.push(Segment::Thermal(buildup.clone()));
+                        let mut prev_segment = match segments.last() {
+                            None => vec![],
+                            Some(prev_segment) => {
+                                match prev_segment {
+                                    Segment::Glide(_) => vec![],
+                                    Segment::Thermal(_) => {
+                                        if let Segment::Thermal(v) = segments.pop().unwrap() {
+                                            v
+                                        } else {
+                                            panic!("unreachable")
+                                        }
+                                    }
+                                }
+                            }
+                        };
+
+                        prev_segment.append(&mut buildup.clone());
+
+
+                        let segment = Segment::Thermal(prev_segment);
+                        segments.push(segment);
                         buildup.clear();
                     },
                 }
@@ -89,11 +127,35 @@ impl Flight {
             ).sum::<f32>();
         (thermal_length / total_length) * 100.
     }
+
+    pub fn print_segments(&self) {
+        for segment in &self.segments {
+            let (first, last, glide) = match segment {
+                Segment::Glide(v) => (v.first().unwrap(), v.last().unwrap(), true),
+                Segment::Thermal(v) => (v.first().unwrap(), v.last().unwrap(), false),
+            };
+            let first_time = Time::from_hms((first.timestamp / 3600) as u8, ((first.timestamp % 3600) / 60) as u8, (first.timestamp % 60) as u8);
+            let last_time = Time::from_hms((last.timestamp / 3600) as u8, ((last.timestamp % 3600) / 60) as u8, (last.timestamp % 60) as u8);
+            if glide { println!("Glide:") } else { println!("Thermal") }
+            println!("\t{}:{}:{} -> {}:{}:{}", first_time.hours, first_time.minutes, first_time.seconds, last_time.hours, last_time.minutes, last_time.seconds);
+
+        }
+    }
 }
 
 enum Segment {
     Glide(Vec<Fix>),
     Thermal(Vec<Fix>),
+}
+
+impl Segment {
+    fn total_time(&self) -> u32 {
+        let inner = match self {
+            Segment::Glide(v) => v,
+            Segment::Thermal(v) => v,
+        };
+        inner.last().unwrap().timestamp - inner.first().unwrap().timestamp
+    }
 }
 
 #[cfg(test)]

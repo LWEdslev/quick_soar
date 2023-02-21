@@ -11,6 +11,7 @@ fn main() {
     let pilot_info = parser::pilot_info::PilotInfo::parse(&contents);
     let fixes = get_fixes(&contents);
     let flight = analysis::segmenting::Flight::make(fixes);
-    println!("{}", flight.thermal_percentage());
+    flight.print_segments();
+    //println!("{}", flight.thermal_percentage());
     println!("{} ms since start", start.elapsed().as_millis());
 }
