@@ -3,9 +3,9 @@ use std::str::FromStr;
 use igc::{records::{BRecord, CRecordTurnpoint, Record}, util::{Compass, RawPosition, Time}};
 use regex::{Match, Regex};
 
-
+#[derive(Clone)]
 pub struct Fix {
-    pub timestamp: Time,
+    pub timestamp: u32,
     pub latitude: f32, //positive is north
     pub longitude: f32, //positive is east
     pub alt: i16,
@@ -17,7 +17,7 @@ impl Fix {
         let time = &rec.timestamp;
         let (h,m,s) = (time.hours, time.minutes, time.seconds);
         Self {
-            timestamp: Time::from_hms(h,m,s),
+            timestamp: Time::from_hms(h,m,s).seconds_since_midnight(),
             latitude: lat,
             longitude: lon,
             alt: rec.gps_alt
@@ -25,9 +25,9 @@ impl Fix {
     }
     pub fn to_string(&self) -> String {
         format!("Fix{{time: {}:{}:{}, lat: {}, lon: {}, alt: {}}}",
-                self.timestamp.hours,
-                self.timestamp.minutes,
-                self.timestamp.seconds,
+                self.timestamp / 3600,
+                self.timestamp % 3600 / 60,
+                self.timestamp % 60,
                 self.latitude,
                 self.longitude,
                 self.alt)
@@ -203,7 +203,7 @@ mod tests {
             assert_eq!(fix.alt, brecord.gps_alt);
             assert_eq!(fix.latitude, 51.869633);
             assert_eq!(fix.longitude, -0.5459167);
-            assert_eq!(fix.timestamp, Time::from_hms(9, 41, 42));
+            assert_eq!(fix.timestamp, Time::from_hms(9, 41, 42).seconds_since_midnight());
         } else {
             assert!(false)
         };
