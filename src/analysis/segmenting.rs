@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use igc::util::Time;
 use crate::parser::util::Fix;
 use crate::{analysis, parser};
@@ -14,7 +15,8 @@ impl Flight {
 
         const DEGREE_BOUNDARY: f32 = 120.;  //turn this many degrees in
         const TIME_WINDOW: u32 = 15;        //this much time
-        const THERMAL_TIME_LIMIT: u32 = 45; //time one has to stop thermalling for it to be a glide
+        const THERMAL_TIME_LIMIT: u32 = 50; //time one has to stop thermalling for it to be a glide
+        const THERMAL_BACKSET: usize = 8;   //correcting factor for backwards looking thermal model should be roughly TIME_WINDOW / 2
         let target = DEGREE_BOUNDARY / TIME_WINDOW as f32;
 
         let mut prev_fix = fixes.get(0).unwrap();
@@ -49,10 +51,7 @@ impl Flight {
                         let segment = if time_of_segment <=  THERMAL_TIME_LIMIT {
                             let mut prev_segment = match segments.pop() {
                                 None => vec![],
-                                Some(prev_segment) => match prev_segment {
-                                    Segment::Glide(v) => v,
-                                    Segment::Thermal(v) => v,
-                                }
+                                Some(prev_segment) => prev_segment.inner().to_vec(),
                             };
 
                             prev_segment.append(&mut buildup.clone());
@@ -76,14 +75,14 @@ impl Flight {
                             None => vec![],
                             Some(prev_segment) => {
                                 match prev_segment {
-                                    Segment::Glide(_) => vec![],
                                     Segment::Thermal(_) => {
                                         if let Segment::Thermal(v) = segments.pop().unwrap() {
                                             v
                                         } else {
                                             panic!("unreachable")
                                         }
-                                    }
+                                    },
+                                    _ => vec![],
                                 }
                             }
                         };
@@ -105,6 +104,52 @@ impl Flight {
 
         }
 
+        segments.push(Segment::Glide(buildup));
+
+        fn move_fixes_to_right_segments_by(segments: &mut Vec<Segment>, seconds: usize) {
+            let mut segments = segments.into_iter();
+            let mut curr_seg = segments.next().unwrap();
+            for next_seg in segments {
+                let first_time = curr_seg.mut_inner().first().unwrap().timestamp;
+                let last_time = curr_seg.mut_inner().last().unwrap().timestamp;
+                let time_delta = last_time - first_time;
+                let log_time = time_delta as f32 / curr_seg.inner().len() as f32;
+
+                let how_many_to_take = (seconds as f32 / log_time) as usize;
+                let curr_size = curr_seg.inner().len();
+
+                let mut fixes_to_move: Vec<Fix> = if curr_seg.mut_inner().len() > how_many_to_take {
+                    let last_index = curr_seg.mut_inner().len();
+                    curr_seg.mut_inner().drain(last_index-how_many_to_take .. ).collect()
+                } else {
+                    curr_seg.mut_inner().drain(..).collect()
+                };
+                let mut debug = next_seg.inner().len();
+                add_fixes_to_segment(next_seg, &mut fixes_to_move);
+                debug = next_seg.inner().len();
+                curr_seg = next_seg;
+            }
+        }
+
+        fn add_fixes_to_segment(segment: &mut Segment, fixes: &mut Vec<Fix>) {
+            fixes.append(segment.mut_inner());
+            segment.mut_inner().drain(..);
+            segment.mut_inner().append(fixes)
+        }
+
+        fn replace_short_thermals_with_tries(segments: &mut Vec<Segment>, minimum_thermal_time: u32) {
+            for i in 0..segments.len() {
+                if segments[i].total_time() <= minimum_thermal_time {
+                    let removed_inner = segments.remove(i).inner().clone();
+                    segments.insert(i, Segment::Try(removed_inner))
+                }
+            }
+        }
+
+        move_fixes_to_right_segments_by(&mut segments, THERMAL_BACKSET);
+
+        replace_short_thermals_with_tries(&mut segments, THERMAL_TIME_LIMIT);
+
         Self {
             segments,
         }
@@ -114,8 +159,8 @@ impl Flight {
         let thermal_length: f32 =
             self.segments.iter().map(
                 |s| match s {
-                    Segment::Glide(_) => 0.,
                     Segment::Thermal(v) => v.len() as f32,
+                    _ => 0.
                 }
             ).sum::<f32>();
         let total_length: f32 =
@@ -123,6 +168,7 @@ impl Flight {
                 |s| match s {
                     Segment::Glide(v) => v.len() as f32,
                     Segment::Thermal(v) => v.len() as f32,
+                    Segment::Try(v) => v.len() as f32,
                 }
             ).sum::<f32>();
         (thermal_length / total_length) * 100.
@@ -130,15 +176,23 @@ impl Flight {
 
     pub fn print_segments(&self) {
         for segment in &self.segments {
-            let (first, last, glide) = match segment {
-                Segment::Glide(v) => (v.first().unwrap(), v.last().unwrap(), true),
-                Segment::Thermal(v) => (v.first().unwrap(), v.last().unwrap(), false),
-            };
-            let first_time = Time::from_hms((first.timestamp / 3600) as u8, ((first.timestamp % 3600) / 60) as u8, (first.timestamp % 60) as u8);
-            let last_time = Time::from_hms((last.timestamp / 3600) as u8, ((last.timestamp % 3600) / 60) as u8, (last.timestamp % 60) as u8);
-            if glide { println!("Glide:") } else { println!("Thermal") }
-            println!("\t{}:{}:{} -> {}:{}:{}", first_time.hours, first_time.minutes, first_time.seconds, last_time.hours, last_time.minutes, last_time.seconds);
+            let inner = segment.inner();
+            if inner.is_empty() {
+                println!("\tEmpty")
+            } else {
 
+                let first = inner.first().unwrap();
+                let last = inner.last().unwrap();
+                let preffix_type = match segment {
+                    Segment::Glide(_) => "Glide:",
+                    Segment::Thermal(_) => "Thermal:",
+                    Segment::Try(_) => "Try:",
+                };
+                let first_time = Time::from_hms((first.timestamp / 3600) as u8, ((first.timestamp % 3600) / 60) as u8, (first.timestamp % 60) as u8);
+                let last_time = Time::from_hms((last.timestamp / 3600) as u8, ((last.timestamp % 3600) / 60) as u8, (last.timestamp % 60) as u8);
+                println!("{}", preffix_type);
+                println!("\t{}:{}:{} -> {}:{}:{}", first_time.hours, first_time.minutes, first_time.seconds, last_time.hours, last_time.minutes, last_time.seconds);
+            }
         }
     }
 }
@@ -146,6 +200,7 @@ impl Flight {
 enum Segment {
     Glide(Vec<Fix>),
     Thermal(Vec<Fix>),
+    Try(Vec<Fix>),
 }
 
 impl Segment {
@@ -153,8 +208,37 @@ impl Segment {
         let inner = match self {
             Segment::Glide(v) => v,
             Segment::Thermal(v) => v,
+            Segment::Try(v) => v,
         };
+        if inner.len() == 0 { return 0 }
         inner.last().unwrap().timestamp - inner.first().unwrap().timestamp
+    }
+
+    fn mut_inner(&mut self) -> &mut Vec<Fix> {
+        match self {
+            Segment::Glide(v) => v,
+            Segment::Thermal(v) => v,
+            Segment::Try(v) => v,
+        }
+    }
+
+    fn as_try(&self) -> Segment {
+        Segment::Try(self.inner().clone())
+    }
+
+    fn inner(&self) -> &Vec<Fix> {
+        match self {
+            Segment::Glide(v) => v,
+            Segment::Thermal(v) => v,
+            Segment::Try(v) => v,
+        }
+    }
+
+    fn is_glide(&self) -> bool {
+        match self {
+            Segment::Thermal(_) => false,
+            _ => true,
+        }
     }
 }
 
@@ -171,11 +255,125 @@ mod tests {
         let target_percentage: f32 = 36.6;
         let acceptance = 4.;
         let range = target_percentage - acceptance .. target_percentage + acceptance;
-        println!("Segments: {}", &flight.segments.len());
-        println!("Percentage: {}", &flight.thermal_percentage());
+        println!("Kawa 1\tSegments: {}", &flight.segments.len());
+        println!("Kawa 1\tPercentage: {}", &flight.thermal_percentage());
         assert!(range.contains(&flight.thermal_percentage()));
     }
 
-    //TODO: Make more tests for segmenting, the entire program relies on this algorithm so it must be bulletproof
+    #[test]
+    fn segmenting_2_sec() {
+        let contents = parser::util::get_contents("examples/aat.igc").unwrap();
+        let fixes = parser::util::get_fixes(&contents);
+        let n = 2;
+        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
+        let flight = Flight::make(every_nth);
+        let target_percentage: f32 = 36.6;
+        let acceptance = 4.;
+        let range = target_percentage - acceptance .. target_percentage + acceptance;
+        println!("Kawa 2\tSegments: {}", &flight.segments.len());
+        println!("Kawa 2\tPercentage: {}", &flight.thermal_percentage());
+        assert!(range.contains(&flight.thermal_percentage()));
+    }
+
+    #[test]
+    fn segmenting_3_sec() {
+        let contents = parser::util::get_contents("examples/aat.igc").unwrap();
+        let fixes = parser::util::get_fixes(&contents);
+        let n = 3;
+        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
+        let flight = Flight::make(every_nth);
+        let target_percentage: f32 = 36.6;
+        let acceptance = 4.;
+        let range = target_percentage - acceptance .. target_percentage + acceptance;
+        println!("Kawa 3\tSegments: {}", &flight.segments.len());
+        println!("Kawa 3\tPercentage: {}", &flight.thermal_percentage());
+        assert!(range.contains(&flight.thermal_percentage()));
+    }
+
+    #[test]
+    fn segmenting_4_sec() {
+        let contents = parser::util::get_contents("examples/aat.igc").unwrap();
+        let fixes = parser::util::get_fixes(&contents);
+        let n = 4;
+        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
+        let flight = Flight::make(every_nth);
+        let target_percentage: f32 = 36.6;
+        let acceptance = 4.;
+        let range = target_percentage - acceptance .. target_percentage + acceptance;
+        println!("Kawa 4\tSegments: {}", &flight.segments.len());
+        println!("Kawa 4\tPercentage: {}", &flight.thermal_percentage());
+        assert!(range.contains(&flight.thermal_percentage()));
+    }
+
+    #[test]
+    fn segmenting_5_sec() {
+        let contents = parser::util::get_contents("examples/aat.igc").unwrap();
+        let fixes = parser::util::get_fixes(&contents);
+        let n = 5;
+        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
+        let flight = Flight::make(every_nth);
+        let target_percentage: f32 = 36.6;
+        let acceptance = 4.;
+        let range = target_percentage - acceptance .. target_percentage + acceptance;
+        println!("Kawa 5\tSegments: {}", &flight.segments.len());
+        println!("Kawa 5\tPercentage: {}", &flight.thermal_percentage());
+        assert!(range.contains(&flight.thermal_percentage()));
+    }
+
+    #[test]
+    fn segmenting_1_sec_cx() {
+        let contents = parser::util::get_contents("examples/CX.igc").unwrap();
+        let fixes = parser::util::get_fixes(&contents);
+        let flight = Flight::make(fixes);
+        let target_percentage: f32 = 34.8;
+        let acceptance = 2.;
+        let range = target_percentage - acceptance .. target_percentage + acceptance;
+        println!("CX 1\tSegments: {}", &flight.segments.len());
+        println!("CX 1\tPercentage: {}", &flight.thermal_percentage());
+        assert!(range.contains(&flight.thermal_percentage()));
+    }
+
+    #[test]
+    fn segmenting_2_sec_cx() {
+        let contents = parser::util::get_contents("examples/CX.igc").unwrap();
+        let fixes = parser::util::get_fixes(&contents);
+        let n = 2;
+        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
+        let flight = Flight::make(every_nth);
+        let target_percentage: f32 = 34.8;
+        let acceptance = 4.;
+        let range = target_percentage - acceptance .. target_percentage + acceptance;
+        println!("CX 2\tSegments: {}", &flight.segments.len());
+        println!("CX 2\tPercentage: {}", &flight.thermal_percentage());
+        assert!(range.contains(&flight.thermal_percentage()));
+    }
+
+    #[test]
+    fn segmenting_3_sec_cx() {
+        let contents = parser::util::get_contents("examples/CX.igc").unwrap();
+        let fixes = parser::util::get_fixes(&contents);
+        let n = 3;
+        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
+        let flight = Flight::make(every_nth);
+        let target_percentage: f32 = 34.8;
+        let acceptance = 4.;
+        let range = target_percentage - acceptance .. target_percentage + acceptance;
+        println!("CX 3\tSegments: {}", &flight.segments.len());
+        println!("CX 3\tPercentage: {}", &flight.thermal_percentage());
+        assert!(range.contains(&flight.thermal_percentage()));
+    }
+
+    #[test]
+    fn segmenting_real_3_ke() {
+        let contents = parser::util::get_contents("examples/ast.igc").unwrap();
+        let fixes = parser::util::get_fixes(&contents);
+        let flight = Flight::make(fixes);
+        let target_percentage: f32 = 45.1;
+        let acceptance = 4.;
+        let range = target_percentage - acceptance .. target_percentage + acceptance;
+        println!("KE \tSegments: {}", &flight.segments.len());
+        println!("KE \tPercentage: {}", &flight.thermal_percentage());
+        assert!(range.contains(&flight.thermal_percentage()));
+    }
 }
 
