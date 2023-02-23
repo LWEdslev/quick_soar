@@ -71,7 +71,7 @@ pub fn quick_bearing_change(prev_bearing: Degrees, second: &Fix, last: &Fix) -> 
     }
 }
 
-trait Offsetable {
+pub trait Offsetable {
     fn offset(&mut self, offset: i8);
 }
 

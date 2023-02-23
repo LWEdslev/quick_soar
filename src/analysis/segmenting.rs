@@ -2,9 +2,10 @@ use std::ops::Deref;
 use igc::util::Time;
 use crate::parser::util::Fix;
 use crate::{analysis, parser};
+use crate::analysis::util::Offsetable;
 
 pub struct Flight {
-    segments: Vec<Segment>
+    pub segments: Vec<Segment>
 }
 
 impl Flight {
@@ -15,10 +16,11 @@ impl Flight {
 
         const DEGREE_BOUNDARY: f32 = 120.;  //turn this many degrees in
         const TIME_WINDOW: u32 = 15;        //this much time
-        const THERMAL_TIME_LIMIT: u32 = 50; //time one has to stop thermalling for it to be a glide
-        const THERMAL_BACKSET: usize = 8;   //correcting factor for backwards looking thermal model should be roughly TIME_WINDOW / 2
-        let target = DEGREE_BOUNDARY / TIME_WINDOW as f32;
+        const CONNECT_TIME: u32 = 35;       //time one has to stop thermalling for it to be a glide
+        const THERMAL_BACKSET: usize = 8;  //correcting factor for backwards looking thermal model should be roughly TIME_WINDOW / 2
+        const TRY_TIME: u32 = 45;
 
+        let target = DEGREE_BOUNDARY / TIME_WINDOW as f32;
         let mut prev_fix = fixes.get(0).unwrap();
         let mut curr_fix = fixes.get(0).unwrap();
         let mut next_fix = fixes.get(0).unwrap();
@@ -48,7 +50,7 @@ impl Flight {
                     true => { //We have just started turning!
                         buildup_is_glide = false;
                         let time_of_segment = buildup.last().unwrap().timestamp - buildup.first().unwrap().timestamp;
-                        let segment = if time_of_segment <=  THERMAL_TIME_LIMIT {
+                        let segment = if time_of_segment <= CONNECT_TIME {
                             let mut prev_segment = match segments.pop() {
                                 None => vec![],
                                 Some(prev_segment) => prev_segment.inner().to_vec(),
@@ -148,11 +150,75 @@ impl Flight {
 
         move_fixes_to_right_segments_by(&mut segments, THERMAL_BACKSET);
 
-        replace_short_thermals_with_tries(&mut segments, THERMAL_TIME_LIMIT);
+        replace_short_thermals_with_tries(&mut segments, TRY_TIME);
+
+        let segments = segments.into_iter().filter(|segment| !segment.inner().is_empty()).collect();
 
         Self {
             segments,
         }
+    }
+
+    /// Combines subsequent relevant segments,
+    /// after this the function will consist of Thermal, Glide, Thermal, ...
+    /// with all thermals being below TRY_TIME
+    pub fn combine_segments(&mut self) {
+        let mut buildup = vec![];
+        buildup.push(self.segments.remove(0));
+        while !self.segments.is_empty() {
+            let curr = self.segments.remove(0);
+            match curr {
+                Segment::Glide(mut curr_v) => {
+                    match buildup.pop().unwrap() {
+                        Segment::Glide(mut prev_v) => {
+                            prev_v.append(&mut curr_v);
+                            buildup.push(Segment::Glide(prev_v))
+                        }
+                        Segment::Thermal(v) => {
+                            buildup.push(Segment::Thermal(v));
+                            buildup.push(Segment::Glide(curr_v));
+                        }
+                        Segment::Try(mut prev_v) => {
+                            prev_v.append(&mut curr_v);
+                            buildup.push(Segment::Glide(prev_v))
+                        }
+                    }
+                }
+                Segment::Thermal(mut curr_v) => {
+                    match buildup.pop().unwrap() {
+                        Segment::Glide(prev_v) => {
+                            buildup.push(Segment::Glide(prev_v));
+                            buildup.push(Segment::Thermal(curr_v));
+                        }
+                        Segment::Thermal(mut prev_v) => {
+                            prev_v.append(&mut curr_v);
+                            buildup.push(Segment::Thermal(prev_v));
+                        }
+                        Segment::Try(prev_v) => {
+                            buildup.push(Segment::Glide(prev_v));
+                            buildup.push(Segment::Thermal(curr_v));
+                        }
+                    }
+                }
+                Segment::Try(mut curr_v) => {
+                    match buildup.pop().unwrap() {
+                        Segment::Glide(mut prev_v) => {
+                            prev_v.append(&mut curr_v);
+                            buildup.push(Segment::Glide(prev_v));
+                        }
+                        Segment::Thermal(prev_v) => {
+                            buildup.push(Segment::Thermal(prev_v));
+                            buildup.push(Segment::Glide(curr_v));
+                        }
+                        Segment::Try(mut prev_v) => {
+                            prev_v.append(&mut curr_v);
+                            buildup.push(Segment::Glide(prev_v));
+                        }
+                    }
+                }
+            }
+        }
+        self.segments = buildup
     }
 
     pub fn thermal_percentage(&self) -> f32 {
@@ -174,7 +240,7 @@ impl Flight {
         (thermal_length / total_length) * 100.
     }
 
-    pub fn print_segments(&self) {
+    pub fn print_segments(&self, timezone: u8) {
         for segment in &self.segments {
             let inner = segment.inner();
             if inner.is_empty() {
@@ -188,16 +254,26 @@ impl Flight {
                     Segment::Thermal(_) => "Thermal:",
                     Segment::Try(_) => "Try:",
                 };
-                let first_time = Time::from_hms((first.timestamp / 3600) as u8, ((first.timestamp % 3600) / 60) as u8, (first.timestamp % 60) as u8);
-                let last_time = Time::from_hms((last.timestamp / 3600) as u8, ((last.timestamp % 3600) / 60) as u8, (last.timestamp % 60) as u8);
+                let first_time = Time::from_hms(timezone+(first.timestamp / 3600) as u8, ((first.timestamp % 3600) / 60) as u8, (first.timestamp % 60) as u8);
+                let last_time = Time::from_hms(timezone+(last.timestamp / 3600) as u8, ((last.timestamp % 3600) / 60) as u8, (last.timestamp % 60) as u8);
+
+
                 println!("{}", preffix_type);
                 println!("\t{}:{}:{} -> {}:{}:{}", first_time.hours, first_time.minutes, first_time.seconds, last_time.hours, last_time.minutes, last_time.seconds);
             }
         }
     }
+
+    pub fn count_thermals(&self) -> usize {
+        self.segments.iter().filter(|s| match s {
+            Segment::Glide(_) => false,
+            Segment::Thermal(_) => true,
+            Segment::Try(_) => false,
+        }).count()
+    }
 }
 
-enum Segment {
+pub enum Segment {
     Glide(Vec<Fix>),
     Thermal(Vec<Fix>),
     Try(Vec<Fix>),
@@ -326,7 +402,7 @@ mod tests {
         let fixes = parser::util::get_fixes(&contents);
         let flight = Flight::make(fixes);
         let target_percentage: f32 = 34.8;
-        let acceptance = 2.;
+        let acceptance = 3.;
         let range = target_percentage - acceptance .. target_percentage + acceptance;
         println!("CX 1\tSegments: {}", &flight.segments.len());
         println!("CX 1\tPercentage: {}", &flight.thermal_percentage());
