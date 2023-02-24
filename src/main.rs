@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::time;
+use igc::util::Time;
 
 use quick_soar::*;
 use quick_soar::parser::util::{Fix, get_fixes};
@@ -15,7 +16,7 @@ fn main() {
     let mut flight = analysis::segmenting::Flight::make(fixes.clone());
     flight.print_segments(pilot_info.time_zone as u8);
     println!("--------------------------------");
-    flight.combine_segments();
+    let flight = flight.get_subflight(Time::from_hms(10,0,0), Time::from_hms(12,0,0));
     flight.print_segments(pilot_info.time_zone as u8);
     println!("T count: {}", flight.count_thermals());
 

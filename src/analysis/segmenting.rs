@@ -157,16 +157,20 @@ impl Flight {
 
         let segments = segments.into_iter().filter(|segment| !segment.inner().is_empty()).collect();
 
-        Self {
+
+        let mut flight = Self {
             fixes,
             segments,
-        }
+        };
+        flight.combine_segments();
+
+        flight
     }
 
     /// Combines subsequent relevant segments,
     /// after this the function will consist of Thermal, Glide, Thermal, ...
     /// with all thermals being below TRY_TIME
-    pub fn combine_segments(&mut self) {
+    fn combine_segments(&mut self) {
         let mut buildup = vec![];
         buildup.push(self.segments.remove(0));
         while !self.segments.is_empty() {
@@ -223,6 +227,30 @@ impl Flight {
             }
         }
         self.segments = buildup
+    }
+
+    pub fn get_subflight(&self, from: Time, to: Time) -> Self {
+        let (from, to) = (from.seconds_since_midnight(), to.seconds_since_midnight());
+        let fixes = self.fixes
+            .iter()
+            .filter(|f| (from..to).contains(&f.timestamp))
+            .map(|f| Rc::clone(&f))
+            .collect::<Vec<Rc<Fix>>>();
+        let segments = self.segments.iter()
+            .filter(|s| s.inner().last().unwrap().timestamp >= from && s.inner().first().unwrap().timestamp < to)
+            .map(|mut s| {
+                let inner = s.inner().clone().into_iter().filter(|fix| (from..to).contains(&fix.timestamp)).collect();
+                match s {
+                    Segment::Glide(_) => Segment::Glide(inner),
+                    Segment::Thermal(_) => Segment::Thermal(inner),
+                    Segment::Try(_) => Segment::Try(inner),
+                }
+            })
+            .collect::<Vec<Segment>>();
+        Self {
+            fixes,
+            segments,
+        }
     }
 
     pub fn thermal_percentage(&self) -> f32 {
