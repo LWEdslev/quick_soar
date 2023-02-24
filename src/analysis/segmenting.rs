@@ -1,10 +1,12 @@
 use std::ops::Deref;
+use std::rc::Rc;
 use igc::util::Time;
 use crate::parser::util::Fix;
 use crate::{analysis, parser};
 use crate::analysis::util::Offsetable;
 
 pub struct Flight {
+    fixes: Vec<Rc<Fix>>,
     pub segments: Vec<Segment>
 }
 
@@ -13,6 +15,7 @@ impl Flight {
         let mut segments: Vec<Segment> = vec![];
         let start_alt = fixes.get(0).unwrap().alt;
         let fixes = fixes.into_iter().filter(|f| f.alt > start_alt + 100).collect::<Vec<Fix>>();
+        let fixes = fixes.into_iter().map(|f| Rc::new(f)).collect::<Vec<Rc<Fix>>>();
 
         const DEGREE_BOUNDARY: f32 = 120.;  //turn this many degrees in
         const TIME_WINDOW: u32 = 15;        //this much time
@@ -31,18 +34,18 @@ impl Flight {
             analysis::util::bearing_change(prev_fix, curr_fix, next_fix)
         }).collect::<Vec<f32>>();
 
-        let mut buildup: Vec<Fix> = vec![];
+        let mut buildup: Vec<Rc<Fix>> = vec![];
         let mut buildup_is_glide = true;
         let mut time_buildup = 0;
         let mut short_buildup: Vec<f32> = vec![];
         let mut prev_time = fixes.first().unwrap().timestamp;
 
-        for (fix, change) in fixes.into_iter().zip(bearing_changes) {
+        for (fix, change) in fixes.iter().zip(bearing_changes) {
             let delta_time = fix.timestamp - prev_time;
             prev_time = fix.timestamp;
             time_buildup += delta_time;
             short_buildup.push(change);
-            buildup.push(fix);
+            buildup.push(Rc::clone(&fix));
             let total_degree_change = short_buildup.iter().sum::<f32>();
             if (total_degree_change / (time_buildup as f32)).abs() >= target {
                 //We are turning!
@@ -120,7 +123,7 @@ impl Flight {
                 let how_many_to_take = (seconds as f32 / log_time) as usize;
                 let curr_size = curr_seg.inner().len();
 
-                let mut fixes_to_move: Vec<Fix> = if curr_seg.mut_inner().len() > how_many_to_take {
+                let mut fixes_to_move: Vec<Rc<Fix>> = if curr_seg.mut_inner().len() > how_many_to_take {
                     let last_index = curr_seg.mut_inner().len();
                     curr_seg.mut_inner().drain(last_index-how_many_to_take .. ).collect()
                 } else {
@@ -133,7 +136,7 @@ impl Flight {
             }
         }
 
-        fn add_fixes_to_segment(segment: &mut Segment, fixes: &mut Vec<Fix>) {
+        fn add_fixes_to_segment(segment: &mut Segment, fixes: &mut Vec<Rc<Fix>>) {
             fixes.append(segment.mut_inner());
             segment.mut_inner().drain(..);
             segment.mut_inner().append(fixes)
@@ -155,6 +158,7 @@ impl Flight {
         let segments = segments.into_iter().filter(|segment| !segment.inner().is_empty()).collect();
 
         Self {
+            fixes,
             segments,
         }
     }
@@ -274,9 +278,9 @@ impl Flight {
 }
 
 pub enum Segment {
-    Glide(Vec<Fix>),
-    Thermal(Vec<Fix>),
-    Try(Vec<Fix>),
+    Glide(Vec<Rc<Fix>>),
+    Thermal(Vec<Rc<Fix>>),
+    Try(Vec<Rc<Fix>>),
 }
 
 impl Segment {
@@ -290,7 +294,7 @@ impl Segment {
         inner.last().unwrap().timestamp - inner.first().unwrap().timestamp
     }
 
-    fn mut_inner(&mut self) -> &mut Vec<Fix> {
+    fn mut_inner(&mut self) -> &mut Vec<Rc<Fix>> {
         match self {
             Segment::Glide(v) => v,
             Segment::Thermal(v) => v,
@@ -302,7 +306,7 @@ impl Segment {
         Segment::Try(self.inner().clone())
     }
 
-    fn inner(&self) -> &Vec<Fix> {
+    fn inner(&self) -> &Vec<Rc<Fix>> {
         match self {
             Segment::Glide(v) => v,
             Segment::Thermal(v) => v,
