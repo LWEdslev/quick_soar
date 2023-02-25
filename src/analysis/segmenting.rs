@@ -6,7 +6,7 @@ use crate::{analysis, parser};
 use crate::analysis::util::Offsetable;
 
 pub struct Flight {
-    fixes: Vec<Rc<Fix>>,
+    pub(crate) fixes: Vec<Rc<Fix>>,
     pub segments: Vec<Segment>
 }
 

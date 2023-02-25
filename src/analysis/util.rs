@@ -6,7 +6,7 @@ type Meters = f32;
 type Degrees = f32;
 
 impl Fix {
-    fn distance_to(&self, fix: &Fix) -> Meters {
+    pub(crate) fn distance_to(&self, fix: &Fix) -> Meters {
         let from = (self.latitude, self.longitude);
         let to = (fix.latitude, fix.longitude);
         distance_between(from, to)
@@ -26,7 +26,7 @@ impl Fix {
 }
 
 impl Turnpoint {
-    fn is_inside(&self, fix: &Fix) -> bool {
+    pub(crate) fn is_inside(&self, fix: &Fix) -> bool {
         let from = (self.latitude, self.longitude);
         let to = (fix.latitude, fix.longitude);
         distance_between(from, to) <= self.r1 as f32 //simple beer can model, should be reworked later

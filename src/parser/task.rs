@@ -56,6 +56,14 @@ impl TaskComponent {
         };
         tp.aat
     }
+
+    pub(crate) fn inner(&self) -> &Turnpoint {
+        match self {
+            TaskComponent::Tp(inner) => inner,
+            TaskComponent::Start(inner) => inner,
+            TaskComponent::Finish(inner) => inner,
+        }
+    }
 }
 
 pub struct Turnpoint {
