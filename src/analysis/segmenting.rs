@@ -6,7 +6,7 @@ use crate::{analysis, parser};
 use crate::analysis::util::Offsetable;
 
 pub struct Flight {
-    pub(crate) fixes: Vec<Rc<Fix>>,
+    pub fixes: Vec<Rc<Fix>>,
     pub segments: Vec<Segment>
 }
 
@@ -229,8 +229,7 @@ impl Flight {
         self.segments = buildup
     }
 
-    pub fn get_subflight(&self, from: Time, to: Time) -> Self {
-        let (from, to) = (from.seconds_since_midnight(), to.seconds_since_midnight());
+    pub fn get_subflight(&self, from: u32, to: u32) -> Self {
         let fixes = self.fixes
             .iter()
             .filter(|f| (from..to).contains(&f.timestamp))

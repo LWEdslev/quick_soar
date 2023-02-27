@@ -3,10 +3,11 @@ use std::time;
 use igc::util::Time;
 
 use quick_soar::*;
+use quick_soar::analysis::calculation;
 use quick_soar::parser::util::{Fix, get_fixes};
 
 fn main() {
-    let path = "examples/aat.igc";
+    let path = "examples/ast.igc";
 
     let start = time::Instant::now();
     let contents = parser::util::get_contents(&path).unwrap();
@@ -14,12 +15,13 @@ fn main() {
     let pilot_info = parser::pilot_info::PilotInfo::parse(&contents);
     let fixes = get_fixes(&contents);
     let mut flight = analysis::segmenting::Flight::make(fixes.clone());
-    flight.print_segments(pilot_info.time_zone as u8);
-    println!("--------------------------------");
-    let flight = flight.get_subflight(Time::from_hms(10,0,0), Time::from_hms(12,0,0));
-    flight.print_segments(pilot_info.time_zone as u8);
-    println!("T count: {}", flight.count_thermals());
+    let start_time = Time::from_hms(12, 55, 38).seconds_since_midnight();
+    let calculation = calculation::Calculation::new(task, flight, pilot_info, start_time);
 
+    for leg in calculation.legs {
+        if leg.is_some() {println!("{}", leg.unwrap().fixes.len())}
+        else {println!("none")}
+    }
     //let contents = parser::util::get_contents("examples/CX.igc").unwrap();
     //let fixes = parser::util::get_fixes(&contents);
 
