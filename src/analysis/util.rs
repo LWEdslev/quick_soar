@@ -2,11 +2,11 @@ use igc::util::Time;
 use crate::parser::task::Turnpoint;
 use crate::parser::util::Fix;
 
-type Meters = f32;
+type FloatMeters = f32;
 type Degrees = f32;
 
 impl Fix {
-    pub(crate) fn distance_to(&self, fix: &Fix) -> Meters {
+    pub(crate) fn distance_to(&self, fix: &Fix) -> FloatMeters {
         let from = (self.latitude, self.longitude);
         let to = (fix.latitude, fix.longitude);
         distance_between(from, to)
@@ -15,6 +15,8 @@ impl Fix {
     fn is_inside(&self, turnpoint: &Turnpoint) -> bool {
         turnpoint.is_inside(self)
     }
+
+
 
     fn bearing_to(&self, fix: &Fix) -> Degrees {
         let delta_lat = fix.latitude - self.latitude ;
@@ -31,12 +33,18 @@ impl Turnpoint {
         let to = (fix.latitude, fix.longitude);
         distance_between(from, to) <= self.r1 as f32 //simple beer can model, should be reworked later
     }
+
+    pub(crate) fn distance_to(&self, turnpoint: &Turnpoint) -> FloatMeters {
+        let from = (self.latitude, self.longitude);
+        let to = (turnpoint.latitude, turnpoint.longitude);
+        distance_between(from, to)
+    }
 }
 
 type Lat = f32;
 type Lon = f32;
 
-fn distance_between(from: (Lat, Lon), to: (Lat, Lon)) -> Meters {
+fn distance_between(from: (Lat, Lon), to: (Lat, Lon)) -> FloatMeters {
     let (lat1, lon1) = (from.0.to_radians(), from.1.to_radians());
     let (lat2, lon2) = (to.0.to_radians(), to.1.to_radians());
 

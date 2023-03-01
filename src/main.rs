@@ -4,6 +4,7 @@ use igc::util::Time;
 
 use quick_soar::*;
 use quick_soar::analysis::calculation;
+use quick_soar::analysis::calculation::TaskPiece;
 use quick_soar::parser::util::{Fix, get_fixes};
 
 fn main() {
@@ -18,10 +19,8 @@ fn main() {
     let start_time = Time::from_hms(12, 55, 38).seconds_since_midnight();
     let calculation = calculation::Calculation::new(task, flight, pilot_info, start_time);
 
-    for leg in calculation.legs {
-        if leg.is_some() {println!("{}", leg.unwrap().fixes.len())}
-        else {println!("none")}
-    }
+    let speed = calculation.speed(TaskPiece::EntireTask);
+    println!("Speed: {} km/h", speed.unwrap());
     //let contents = parser::util::get_contents("examples/CX.igc").unwrap();
     //let fixes = parser::util::get_fixes(&contents);
 

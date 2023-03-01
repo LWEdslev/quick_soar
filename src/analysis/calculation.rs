@@ -66,25 +66,74 @@ impl Calculation {
         }
     }
 
-    pub fn speed(&self, task_piece: TaskPiece) -> Kph { todo!() }
+    pub fn speed(&self, task_piece: TaskPiece) -> Option<Kph> {
+        match task_piece {
+            TaskPiece::EntireTask => {
+                let legs = &self.legs;
+                if !legs.iter().all(|leg| leg.is_some() && leg.as_ref().unwrap().fixes.len() > 1) {return None}; //there is an unfinished leg
+                let time = {
+                    let first = match self.legs.first().unwrap() {
+                        None => return None,
+                        Some(leg) => {leg.fixes.first().unwrap().timestamp}
+                    };
 
-    pub fn glide_ratio(&self, task_piece: TaskPiece) -> Kph { todo!() }
+                    let last = match self.legs.last().unwrap() {
+                        None => return None,
+                        Some(leg) => {leg.fixes.last().unwrap().timestamp}
+                    };
+                    last - first
+                };
+                match &self.task.task_type {
+                    TaskType::AAT(min_time) => {
+                        let distance_of_last_leg = {
+                            let last_leg_fixes = &legs.last().unwrap().as_ref().unwrap().fixes;
+                            last_leg_fixes.first().unwrap().distance_to(last_leg_fixes.last().unwrap())
+                        };
+                        let distance: FloatMeters = legs.windows(2).map(|window| {
+                            let first: Rc<Fix> = Rc::clone(window[0].as_ref().unwrap().fixes.first().unwrap()); //start of leg n
+                            let last: Rc<Fix> = Rc::clone(window[1].as_ref().unwrap().fixes.first().unwrap());  //start of leg n+1
+                            first.distance_to(&last)
+                        }).sum::<f32>() + distance_of_last_leg;
 
-    pub fn excess_distance(&self, task_piece: TaskPiece) -> Percentage { todo!() }
+                        let time = time.max(min_time.seconds_since_midnight()); //if less than min_time it should be min_time
 
-    pub fn climb_rate(&self, task_piece: TaskPiece) -> Mps { todo!() }
+                        Some(3.6 * distance / (time as f32))
+                    }
+                    TaskType::AST => {
+                        let points = &self.task.points;
+                        let distance: FloatMeters = points.windows(2).map(|window| {
+                            let first = window[0].inner();
+                            let second = window[1].inner();
+                            first.distance_to(second)
+                        }).sum::<f32>();
+                        let distance = distance - (points.last().unwrap().inner().r1 as f32);
+                        Some(3.6 * distance / (time as f32))
+                    }
+                }
+            }
+            TaskPiece::Leg(leg_number) => {
+                todo!()
+            }
+        }
+    }
 
-    pub fn start_time(&self, task_piece: TaskPiece) -> Time { todo!() }
+    pub fn glide_ratio(&self, task_piece: TaskPiece) -> Option<Kph> { todo!() }
 
-    pub fn finish_time(&self, task_piece: TaskPiece) -> Time { todo!() }
+    pub fn excess_distance(&self, task_piece: TaskPiece) -> Option<Percentage> { todo!() }
 
-    pub fn start_alt(&self, task_piece: TaskPiece) -> Time { todo!() }
+    pub fn climb_rate(&self, task_piece: TaskPiece) -> Option<Mps> { todo!() }
 
-    pub fn climb_ground_speed(&self, task_piece: TaskPiece) -> Kph { todo!() }
+    pub fn start_time(&self, task_piece: TaskPiece) -> Option<Time> { todo!() }
 
-    pub fn glide_speed(&self, task_piece: TaskPiece) -> Kph { todo!() }
+    pub fn finish_time(&self, task_piece: TaskPiece) -> Option<Time> { todo!() }
 
-    pub fn climb_percentage(&self, task_piece: TaskPiece) -> Percentage { todo!() }
+    pub fn start_alt(&self, task_piece: TaskPiece) -> Option<Time> { todo!() }
+
+    pub fn climb_ground_speed(&self, task_piece: TaskPiece) -> Option<Kph> { todo!() }
+
+    pub fn glide_speed(&self, task_piece: TaskPiece) -> Option<Kph> { todo!() }
+
+    pub fn climb_percentage(&self, task_piece: TaskPiece) -> Option<Percentage> { todo!() }
 
     fn calculate_fixes(fixes: &Vec<Rc<Fix>>) -> Vec<Rc<CalculatedFix>> {
         if fixes.is_empty() {return vec![]};
@@ -139,7 +188,7 @@ impl Calculation {
                 legs
 
             }
-            TaskType::AAT(_) => { vec![] } //TODO: Add AAT support
+            TaskType::AAT(_) => { todo!() } //TODO: Add AAT support
         }
     }
 }

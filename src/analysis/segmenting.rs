@@ -302,6 +302,10 @@ impl Flight {
             Segment::Try(_) => false,
         }).count()
     }
+
+    pub(crate) fn total_time(&self) -> u32 {
+        self.fixes.last().unwrap().timestamp - self.fixes.first().unwrap().timestamp
+    }
 }
 
 pub enum Segment {
