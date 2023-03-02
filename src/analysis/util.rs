@@ -12,6 +12,12 @@ impl Fix {
         distance_between(from, to)
     }
 
+    pub(crate) fn distance_to_tp(&self, turnpoint: &Turnpoint) -> FloatMeters {
+        let from = (self.latitude, self.longitude);
+        let to = (turnpoint.latitude, turnpoint.longitude);
+        distance_between(from, to)
+    }
+
     fn is_inside(&self, turnpoint: &Turnpoint) -> bool {
         turnpoint.is_inside(self)
     }

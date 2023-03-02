@@ -14,7 +14,7 @@ impl Flight {
     pub fn make(fixes: Vec<Fix>) -> Self {
         let mut segments: Vec<Segment> = vec![];
         let start_alt = fixes.get(0).unwrap().alt;
-        let fixes = fixes.into_iter().filter(|f| f.alt > start_alt + 100).collect::<Vec<Fix>>();
+        let fixes = fixes.into_iter().filter(|f| f.alt > start_alt + 50).collect::<Vec<Fix>>();
         let fixes = fixes.into_iter().map(|f| Rc::new(f)).collect::<Vec<Rc<Fix>>>();
 
         const DEGREE_BOUNDARY: f32 = 120.;  //turn this many degrees in

@@ -44,7 +44,7 @@ pub struct Calculation {
 }
 
 impl Calculation {
-    pub fn new(task: Task, flight: Flight, pilot_info: PilotInfo, start_time: u32) -> Calculation {
+    pub fn new(task: Task, flight: Flight, pilot_info: PilotInfo, start_time: Option<u32>) -> Calculation {
         let fixes = flight.fixes.iter().map(|f| Rc::clone(&f)).collect::<Vec<Rc<Fix>>>();
 
         let calculated_fixes = Calculation::calculate_fixes(&fixes);
@@ -146,38 +146,43 @@ impl Calculation {
         }).collect::<Vec<Rc<CalculatedFix>>>()
     }
 
-    fn make_legs(fixes: &Vec<Rc<Fix>>, task: &Task, start_time: u32, flight: &Flight) -> Vec<Option<Flight>> {
+    fn make_legs(fixes: &Vec<Rc<Fix>>, task: &Task, start_time: Option<u32>, flight: &Flight) -> Vec<Option<Flight>> {
+
+        let mut turnpoints = task.points.iter();
+        let start_point = turnpoints.next().unwrap();
+        if start_time.is_none() { return turnpoints.map(|t| None).collect::<Vec<Option<Flight>>>()}; //No start should give no legs
+        let start_time = start_time.unwrap();
+        let mut fixes = fixes.iter().filter(|fix| fix.timestamp >= start_time); //get fixes after start
+        let start_fix = fixes.next();
+        let mut inside_turnpoints = turnpoints.map(|turnpoint| match turnpoint {
+            TaskComponent::Start(_) => {panic!("unexpected start token")}
+            _ => {
+                fixes.clone().filter(|fix| turnpoint.inner().is_inside(fix))
+                    .map(|f| Rc::clone(f))
+                    .collect::<Vec<Rc<Fix>>>()
+            }
+        }).collect::<Vec<Vec<Rc<Fix>>>>();
+        inside_turnpoints.insert(0, vec![Rc::clone(start_fix.unwrap())]); //add start as the first turnpoint
+
+        let mut curr_time = Some(inside_turnpoints.first().unwrap().first().unwrap().timestamp);
+        let start_time = inside_turnpoints.remove(0).first().unwrap().timestamp;
+        let mut leg_times = inside_turnpoints.iter().map(|in_tp| {
+            if curr_time.is_none() { return None } //landout previously
+            let after_prev = in_tp.iter().filter(|fix| fix.timestamp >= curr_time.unwrap()).collect::<Vec<&Rc<Fix>>>();
+            if after_prev.is_empty() { //landout
+
+                None
+            } else {
+                let found = Some(after_prev.first().unwrap().timestamp);
+                curr_time = found;
+                found
+            }
+        }).collect::<Vec<Option<u32>>>();
+        leg_times.insert(0, Some(start_time));
+        inside_turnpoints.insert(0, vec![Rc::clone(start_fix.unwrap())]); //add start as the first turnpoint
+
         match task.task_type {
             TaskType::AST => {
-                let mut turnpoints = task.points.iter();
-                let start_point = turnpoints.next().unwrap();
-                let mut fixes = fixes.iter().filter(|fix| fix.timestamp >= start_time); //get fixes after start
-                let start_fix = fixes.next();
-                let mut inside_turnpoints = turnpoints.map(|turnpoint| match turnpoint {
-                    TaskComponent::Start(_) => {panic!("unexpected start token")}
-                    _ => {
-                        fixes.clone().filter(|fix| turnpoint.inner().is_inside(fix))
-                            .map(|f| Rc::clone(f))
-                            .collect::<Vec<Rc<Fix>>>()
-                    }
-                }).collect::<Vec<Vec<Rc<Fix>>>>();
-                inside_turnpoints.insert(0, vec![Rc::clone(start_fix.unwrap())]); //add start as the first turnpoint
-
-                let mut curr_time = Some(inside_turnpoints.first().unwrap().first().unwrap().timestamp);
-                let start_time = inside_turnpoints.remove(0).first().unwrap().timestamp;
-                let mut leg_times = inside_turnpoints.iter().map(|in_tp| {
-                    if curr_time.is_none() { return None } //landout previously
-                    let after_prev = in_tp.iter().filter(|fix| fix.timestamp >= curr_time.unwrap()).collect::<Vec<&Rc<Fix>>>();
-                    if after_prev.is_empty() { //landout
-                        None
-                    } else {
-                        let found = Some(after_prev.first().unwrap().timestamp);
-                        curr_time = found;
-                        found
-                    }
-                }).collect::<Vec<Option<u32>>>();
-                leg_times.insert(0, Some(start_time));
-
                 let legs = leg_times.windows(2).map(|window| {
                     match (window[0], window[1]) {
                         (Some(start), Some(end)) => Some(flight.get_subflight(start, end)),
@@ -188,7 +193,68 @@ impl Calculation {
                 legs
 
             }
-            TaskType::AAT(_) => { todo!() } //TODO: Add AAT support
+            TaskType::AAT(_) => {
+                //Getting ordered non-overlapping of consecutive sectors inside turnpoints
+                let finish_fix = inside_turnpoints.last().unwrap().first();
+                let mut inside_turnpoints = inside_turnpoints.iter().zip(leg_times.windows(2)).map(|(v, leg_time)| {
+                    let start_leg = leg_time[0];
+                    let end_leg = leg_time[1];
+                    v.iter().filter(move |fix|
+                        start_leg.is_some() && start_leg.unwrap() <= fix.timestamp
+                    &&  end_leg.is_some() && end_leg.unwrap() > fix.timestamp
+                    ).map(|f| Rc::clone(f)).collect::<Vec<Rc<Fix>>>()
+                }).collect::<Vec<Vec<Rc<Fix>>>>();
+                inside_turnpoints.push(match finish_fix {
+                    None => vec![],
+                    Some(fix) => vec![Rc::clone(fix)],
+                });
+                //at this point |inside_turnpoints| == |task.points|
+
+                let start_fixes = inside_turnpoints.remove(0);
+                let finish_fixes = inside_turnpoints.pop();
+                let mut prev_optimal = Some(Rc::clone(start_fixes.first().unwrap()));
+                assert_eq!(inside_turnpoints.len(), task.points.windows(3).count());
+                let mut leg_times = task.points.windows(3).zip(inside_turnpoints).map(|(window, fixes)| {
+                    match &prev_optimal {
+                        None => None,
+                        Some(prev_optimal_inner) => {
+                            let (_, _, next) = (&window[0], &window[1], &window[2]);
+                            let best_fix = fixes.iter()
+                                .max_by(|x, y| {
+                                (x.distance_to_tp(next.inner()) + x.distance_to(&prev_optimal_inner))
+                                    .total_cmp(&(y.distance_to_tp(next.inner()) + y.distance_to(&prev_optimal_inner)))
+                            });
+
+                            match best_fix {
+                                None => {
+                                    prev_optimal = None;
+                                    None
+                                },
+                                Some(best_fix) => {
+                                    prev_optimal = Some(Rc::clone(best_fix));
+                                    Some(best_fix.timestamp)
+                                }
+                            }
+                        }
+                    }
+
+
+                }).collect::<Vec<Option<u32>>>();
+                leg_times.insert(0, Some(start_time)); //add start
+                leg_times.push(match finish_fix { //push finish
+                    None => None,
+                    Some(fix) => Some(fix.timestamp),
+                });
+
+                let legs = leg_times.windows(2).map(|window| {
+                    match (window[0], window[1]) {
+                        (Some(start), Some(end)) => Some(flight.get_subflight(start, end)),
+                        _ => None,
+                    }
+                }).collect::<Vec<Option<Flight>>>();
+
+                legs
+            }
         }
     }
 }
