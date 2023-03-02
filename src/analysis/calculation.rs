@@ -112,7 +112,24 @@ impl Calculation {
                 }
             }
             TaskPiece::Leg(leg_number) => {
-                todo!()
+                if leg_number >= self.legs.len() {return None}
+                let leg = self.legs[leg_number].as_ref();
+                if leg.is_none() {return None}
+                let points = &self.task.points;
+                let time = leg.unwrap().total_time();
+                match self.task.task_type {
+                    TaskType::AAT(_) => {
+
+                        let distance = leg.unwrap();
+                        let distance = distance.fixes.first().unwrap().distance_to(distance.fixes.last().unwrap());
+                        Some(3.6 * distance / (time as f32))
+                    }
+                    TaskType::AST => {
+                        let distance = points[leg_number].inner().distance_to(points[leg_number + 1].inner());
+                        Some(3.6 * distance / (time as f32))
+                    }
+                }
+
             }
         }
     }
@@ -214,7 +231,7 @@ impl Calculation {
                 let finish_fixes = inside_turnpoints.pop();
                 let mut prev_optimal = Some(Rc::clone(start_fixes.first().unwrap()));
                 assert_eq!(inside_turnpoints.len(), task.points.windows(3).count());
-                let mut leg_times = task.points.windows(3).zip(inside_turnpoints).map(|(window, fixes)| {
+                let mut leg_times = task.points.windows(3).zip(inside_turnpoints.iter()).map(|(window, fixes)| {
                     match &prev_optimal {
                         None => None,
                         Some(prev_optimal_inner) => {
@@ -245,7 +262,6 @@ impl Calculation {
                     None => None,
                     Some(fix) => Some(fix.timestamp),
                 });
-
                 let legs = leg_times.windows(2).map(|window| {
                     match (window[0], window[1]) {
                         (Some(start), Some(end)) => Some(flight.get_subflight(start, end)),
