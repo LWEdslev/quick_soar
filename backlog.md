@@ -9,14 +9,14 @@
 - Utility
   - **OK** Distance
   - **OK** Inside turnpoint
-- Segmenting
+- **OK** Segmenting
 - Calculation
 
-### Soup (target: 7 mar)
+### Soup (target: 11 mar)
 
-### XSSF  (target: 14 mar)
+### XSSF  (target: 18 mar)
 - Simple excel writer
-### GUI (target: 21 mar)
+### GUI (target: 25 mar)
 - Iced
 
 ### Later
