@@ -8,7 +8,7 @@ use quick_soar::analysis::calculation::TaskPiece;
 use quick_soar::parser::util::{Fix, get_fixes};
 
 fn main() {
-    let path = "examples/aat_outlanding.igc";
+    let path = "examples/aat.igc";
 
     let start = time::Instant::now();
     let contents = parser::util::get_contents(&path).unwrap();
@@ -25,8 +25,19 @@ fn main() {
     let legs_size = calculation.legs.len();
     for leg_index in 0..legs_size {
         let speed = calculation.speed(TaskPiece::Leg(leg_index));
-        if speed.is_some() {println!("Leg {} Speed: {} km/h", leg_index + 1, speed.unwrap())};
+        if speed.is_some() {print!("Leg {} Speed: {} km/h -- ", leg_index + 1, speed.unwrap())};
     }
+    println!();
+
+    let glide_ratio = calculation.glide_ratio(TaskPiece::EntireTask);
+    if glide_ratio.is_some() {println!("Task Glide ratio: {}", glide_ratio.unwrap())};
+
+    let legs_size = calculation.legs.len();
+    for leg_index in 0..legs_size {
+        let glide_ratio = calculation.glide_ratio(TaskPiece::Leg(leg_index));
+        if glide_ratio.is_some() {print!("Leg {} Glide ratio: {} -- ", leg_index + 1, glide_ratio.unwrap())};
+    }
+    println!();
 
     //println!("{}", flight.thermal_percentage());
     println!("{} ms since start", start.elapsed().as_millis());

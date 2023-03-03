@@ -252,6 +252,18 @@ impl Flight {
         }
     }
 
+    pub fn get_subflight_from_option(&self, from: Option<u32>, to: Option<u32>) -> Self {
+        let from = match from {
+            None => self.fixes.first().unwrap().timestamp,
+            Some(from) => from,
+        };
+        let to = match to {
+            None => self.fixes.last().unwrap().timestamp,
+            Some(to) => to,
+        };
+        self.get_subflight(from, to)
+    }
+
     pub fn thermal_percentage(&self) -> f32 {
         let thermal_length: f32 =
             self.segments.iter().map(
@@ -337,7 +349,7 @@ impl Segment {
         Segment::Try(self.inner().clone())
     }
 
-    fn inner(&self) -> &Vec<Rc<Fix>> {
+    pub fn inner(&self) -> &Vec<Rc<Fix>> {
         match self {
             Segment::Glide(v) => v,
             Segment::Thermal(v) => v,

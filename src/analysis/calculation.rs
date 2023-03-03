@@ -1,6 +1,8 @@
+use std::iter::Filter;
 use std::rc::Rc;
+use std::slice::Iter;
 use igc::util::Time;
-use crate::analysis::segmenting::Flight;
+use crate::analysis::segmenting::{Flight, Segment};
 use crate::parser::pilot_info::PilotInfo;
 use crate::parser::task::{Task, TaskComponent, TaskType};
 use crate::parser::util::Fix;
@@ -55,6 +57,14 @@ impl Calculation {
             None => None,
             Some(inner) => Some(Calculation::calculate_fixes(&inner.fixes)),
         }).collect();
+
+        let last_time = if legs.last().is_some() && legs.last().unwrap().is_some() {
+            legs.last().as_ref().unwrap().as_ref().unwrap().fixes.last().unwrap().timestamp
+        } else {
+            flight.fixes.last().as_ref().unwrap().timestamp
+        };
+
+        let flight = flight.get_subflight_from_option(start_time, Some(last_time));
 
         Self {
             legs,
@@ -134,7 +144,39 @@ impl Calculation {
         }
     }
 
-    pub fn glide_ratio(&self, task_piece: TaskPiece) -> Option<Kph> { todo!() }
+    pub fn glide_ratio(&self, task_piece: TaskPiece) -> Option<Kph> {
+        let segments = match task_piece {
+            TaskPiece::EntireTask => {
+                Some(&self.total_flight.segments)
+            }
+            TaskPiece::Leg(leg_number) => {
+                if (&self).legs.len() <= leg_number || (&self).legs[leg_number].is_none() {return None};
+                Some(&self.legs[leg_number].as_ref().unwrap().segments)
+            }
+        };
+        let segments = segments?;
+        let glides = segments.into_iter().filter(|s| match s {
+            Segment::Thermal(_) => false,
+            Segment::Glide(_) => true,
+            Segment::Try(_) => true,
+        });
+        let (dist, alt_loss) = glides.into_iter().map(|s| {
+            let inner = s.inner();
+            let dist = inner.windows(2).map(|w| {
+                let first = &w[0];
+                let second = &w[1];
+                first.distance_to(second)
+            }).sum::<f32>();
+            let alt = inner.windows(2).map(|w| {
+                let first = &w[0];
+                let second = &w[1];
+                first.alt - second.alt
+            }).sum::<i16>();
+            (dist, alt)
+        })
+            .fold((0f32,0i16), |acc, (dist, alt)| (acc.0 + dist, acc.1 + alt));
+        Some(dist / (alt_loss as f32))
+    }
 
     pub fn excess_distance(&self, task_piece: TaskPiece) -> Option<Percentage> { todo!() }
 
