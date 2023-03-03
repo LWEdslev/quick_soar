@@ -32,6 +32,7 @@ impl CalculatedFix {
             alt_gain,
             time_delta,
             timestamp: from.timestamp,
+
         }
     }
 }
@@ -178,11 +179,56 @@ impl Calculation {
         Some(dist / (alt_loss as f32))
     }
 
+    pub fn distance(&self, task_piece: TaskPiece) -> Option<FloatMeters> {
+        match task_piece {
+            TaskPiece::EntireTask => {
+                let task = &self.task;
+                match task.task_type {
+                    TaskType::AAT(_) => {
+                        Some(self.legs.iter().map(|leg| {
+                            match leg {
+                                None => 0.,
+                                Some(leg) => leg.fixes.first().unwrap().distance_to(leg.fixes.last().unwrap()),
+                            }
+                        }).sum())
+                    }
+                    TaskType::AST => {
+                        Some(task.points.windows(2).map(|w| {
+                            let curr = &w[0].inner();
+                            let next = &w[1].inner();
+                            curr.distance_to(next)
+                        }).sum())
+                    }
+                }
+            }
+            TaskPiece::Leg(leg_number) => {
+                let leg = self.legs.get(leg_number)?;
+                let leg = leg.as_ref()?;
+                let first = leg.fixes.first().unwrap();
+                let last = leg.fixes.last().unwrap();
+                Some(first.distance_to(last))
+            }
+        }
+    }
+
     pub fn excess_distance(&self, task_piece: TaskPiece) -> Option<Percentage> { todo!() }
 
     pub fn climb_rate(&self, task_piece: TaskPiece) -> Option<Mps> { todo!() }
 
-    pub fn start_time(&self, task_piece: TaskPiece) -> Option<Time> { todo!() }
+    pub fn start_time(&self, task_piece: TaskPiece) -> Option<Time> {
+        match task_piece {
+            TaskPiece::EntireTask => {
+                if self.total_flight.fixes.is_empty() { return None };
+                let time_in_seconds = self.total_flight.fixes[0].timestamp;
+                Some(Time::from_hms((time_in_seconds / 3600) as u8, ((time_in_seconds % 3600) / 60) as u8, (time_in_seconds % 60) as u8))
+            }
+            TaskPiece::Leg(leg_number) => {
+                if self.legs.get(leg_number).is_none() || self.legs.get(leg_number).unwrap().is_none() { return None };
+                let time_in_seconds = self.legs[leg_number].as_ref().unwrap().fixes.first().unwrap().timestamp;
+                Some(Time::from_hms((time_in_seconds / 3600) as u8, ((time_in_seconds % 3600) / 60) as u8, (time_in_seconds % 60) as u8))
+            }
+        }
+    }
 
     pub fn finish_time(&self, task_piece: TaskPiece) -> Option<Time> { todo!() }
 
@@ -192,7 +238,18 @@ impl Calculation {
 
     pub fn glide_speed(&self, task_piece: TaskPiece) -> Option<Kph> { todo!() }
 
-    pub fn climb_percentage(&self, task_piece: TaskPiece) -> Option<Percentage> { todo!() }
+    pub fn climb_percentage(&self, task_piece: TaskPiece) -> Option<Percentage> {
+        match task_piece {
+            TaskPiece::EntireTask => {
+                Some(self.total_flight.thermal_percentage())
+            }
+            TaskPiece::Leg(leg_number) => {
+                let leg = self.legs.get(leg_number)?;
+                let leg = leg.as_ref()?;
+                Some(leg.thermal_percentage())
+            }
+        }
+    }
 
     fn calculate_fixes(fixes: &Vec<Rc<Fix>>) -> Vec<Rc<CalculatedFix>> {
         if fixes.is_empty() {return vec![]};
