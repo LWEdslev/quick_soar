@@ -234,9 +234,13 @@ impl Calculation {
 
     pub fn start_alt(&self, task_piece: TaskPiece) -> Option<Time> { todo!() }
 
-    pub fn climb_ground_speed(&self, task_piece: TaskPiece) -> Option<Kph> { todo!() }
+    pub fn climb_ground_speed(&self, task_piece: TaskPiece) -> Option<Kph> {
+        self.get_avg_speed_of_segment(task_piece, false)
+    }
 
-    pub fn glide_speed(&self, task_piece: TaskPiece) -> Option<Kph> { todo!() }
+    pub fn glide_speed(&self, task_piece: TaskPiece) -> Option<Kph> {
+        self.get_avg_speed_of_segment(task_piece, true)
+    }
 
     pub fn climb_percentage(&self, task_piece: TaskPiece) -> Option<Percentage> {
         match task_piece {
@@ -249,6 +253,37 @@ impl Calculation {
                 Some(leg.thermal_percentage())
             }
         }
+    }
+
+    fn get_avg_speed_of_segment(&self, task_piece: TaskPiece, is_glide: bool) -> Option<Kph> {
+        let flight = match task_piece {
+            TaskPiece::EntireTask => {
+                Some(&self.total_flight)
+            }
+            TaskPiece::Leg(leg_number) => {
+                let leg = &self.legs.get(leg_number)?;
+                leg.as_ref()
+            }
+        };
+
+        let flight = flight?;
+        let climbs = flight.segments.iter().filter(|seg| match seg {
+            Segment::Thermal(_) => !is_glide,
+            _ => is_glide,
+        });
+        let (total_climb_dist, total_climb_time) = climbs.map(|seg| {
+            let dist = seg.inner().windows(2).map(|w| {
+                let curr = &w[0];
+                let next = &w[1];
+                curr.distance_to(next)
+            }).sum::<FloatMeters>();
+            let first = seg.inner().first().unwrap();
+            let last = seg.inner().last().unwrap();
+            let time = last.timestamp - first.timestamp;
+            (dist, time)
+        }).fold((0.,0), |(acc_dist, acc_time), (dist, time)| (acc_dist + dist, acc_time + time));
+        if total_climb_time == 0 { return None };
+        Some(3.6 * (total_climb_dist / (total_climb_time as f32)))
     }
 
     fn calculate_fixes(fixes: &Vec<Rc<Fix>>) -> Vec<Rc<CalculatedFix>> {

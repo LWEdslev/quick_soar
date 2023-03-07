@@ -68,5 +68,23 @@ fn main() {
     }
     println!();
 
+    let speed = calculation.climb_ground_speed(TaskPiece::EntireTask);
+    if speed.is_some() {println!("Climb speed: {} kph", speed.unwrap())};
+
+    for leg_index in 0..legs_size {
+        let speed = calculation.climb_ground_speed(TaskPiece::Leg(leg_index));
+        if speed.is_some() {print!("Leg {} climb speed: {} kph -- ", leg_index + 1, speed.unwrap())};
+    }
+    println!();
+
+    let speed = calculation.glide_speed(TaskPiece::EntireTask);
+    if speed.is_some() {println!("Glide speed: {} kph", speed.unwrap())};
+
+    for leg_index in 0..legs_size {
+        let speed = calculation.glide_speed(TaskPiece::Leg(leg_index));
+        if speed.is_some() {print!("Leg {} glide speed: {} kph -- ", leg_index + 1, speed.unwrap())};
+    }
+    println!();
+
     println!("{} ms since start", start.elapsed().as_millis());
 }
