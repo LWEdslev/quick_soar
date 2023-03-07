@@ -86,5 +86,32 @@ fn main() {
     }
     println!();
 
+    let alt = calculation.start_alt(TaskPiece::EntireTask);
+    if alt.is_some() {println!("Start altitude: {} m", alt.unwrap())};
+
+    for leg_index in 0..legs_size {
+        let alt = calculation.start_alt(TaskPiece::Leg(leg_index));
+        if alt.is_some() {print!("Leg {} start altitude: {} m -- ", leg_index + 1, alt.unwrap())};
+    }
+    println!();
+
+    let climb_rate = calculation.climb_rate(TaskPiece::EntireTask);
+    if climb_rate.is_some() {println!("Task climb rate: {} mps", climb_rate.unwrap())};
+
+    for leg_index in 0..legs_size {
+        let climb_rate = calculation.climb_rate(TaskPiece::Leg(leg_index));
+        if climb_rate.is_some() {print!("Leg {} climb rate: {} mps -- ", leg_index + 1, climb_rate.unwrap())};
+    }
+    println!();
+
+    let percentage = calculation.excess_distance(TaskPiece::EntireTask);
+    if percentage.is_some() {println!("Task excess distance: {}%", percentage.unwrap().floor() as u8)};
+
+    for leg_index in 0..legs_size {
+        let percentage = calculation.excess_distance(TaskPiece::Leg(leg_index));
+        if percentage.is_some() {print!("Leg {} excess distance: {}% -- ", leg_index + 1, percentage.unwrap().floor() as u8)};
+    }
+    println!();
+
     println!("{} ms since start", start.elapsed().as_millis());
 }

@@ -211,9 +211,76 @@ impl Calculation {
         }
     }
 
-    pub fn excess_distance(&self, task_piece: TaskPiece) -> Option<Percentage> { todo!() }
+    pub fn excess_distance(&self, task_piece: TaskPiece) -> Option<Percentage> {
+        let (flight_part, task_dist) = match task_piece {
+            TaskPiece::EntireTask => {
+                let legs = &self.legs;
+                let task_dist = legs.into_iter().map(|leg| {
+                    let leg = leg.as_ref();
+                    if leg.is_none() { 0. } else {
+                        let leg = leg.unwrap();
+                        let first = leg.fixes.first().unwrap();
+                        let last = leg.fixes.last().unwrap();
+                        first.distance_to(last)
+                    }
+                }).sum::<FloatMeters>();
+                (&self.total_flight, task_dist)
+            }
+            TaskPiece::Leg(leg_number) => {
+                let leg = self.legs.get(leg_number)?.as_ref()?;
+                let task_dist = {
+                    let first = leg.fixes.first()?;
+                    let last = leg.fixes.last()?;
+                    first.distance_to(last)
+                };
+                (leg, task_dist)
+            }
+        };
 
-    pub fn climb_rate(&self, task_piece: TaskPiece) -> Option<Mps> { todo!() }
+        let glides = flight_part.segments.iter().filter(|seg| match seg {
+            Segment::Glide(_) => true,
+            _ => false,
+        });
+
+        let total_glide_distance = glides.map(|glide| {
+            let glide = glide.inner();
+            glide.windows(2).map(|w| {
+                let curr = &w[0];
+                let next = &w[1];
+                curr.distance_to(next)
+            }).sum::<FloatMeters>()
+        }).sum::<FloatMeters>();
+
+        Some((100. * total_glide_distance / task_dist) - 100.)
+    }
+
+    pub fn climb_rate(&self, task_piece: TaskPiece) -> Option<Mps> {
+        let flight_part = match task_piece {
+            TaskPiece::EntireTask => {
+                &self.total_flight
+            }
+            TaskPiece::Leg(leg_number) => {
+                let leg = self.legs.get(leg_number)?.as_ref()?;
+                leg
+            }
+        };
+
+        let climbs = flight_part.segments.iter().filter(|seg| match seg {
+            Segment::Thermal(_) => true,
+            _ => false,
+        });
+
+        let (total_alt_gain, total_climb_time) = climbs.map(|climb| {
+            let climb = climb.inner();
+            let first = climb.first().unwrap();
+            let last = climb.last().unwrap();
+            let delta_time = last.timestamp - first.timestamp;
+            let alt_gain = last.alt - first.alt;
+            (alt_gain, delta_time)
+        }).fold((0, 0), |(alt_acc, time_acc), (alt, time)| (alt_acc + alt, time_acc + time));
+        if total_climb_time == 0 {return None};
+        Some((total_alt_gain as f32) / (total_climb_time as f32))
+    }
 
     pub fn start_time(&self, task_piece: TaskPiece) -> Option<Time> {
         match task_piece {
@@ -230,9 +297,18 @@ impl Calculation {
         }
     }
 
-    pub fn finish_time(&self, task_piece: TaskPiece) -> Option<Time> { todo!() }
-
-    pub fn start_alt(&self, task_piece: TaskPiece) -> Option<Time> { todo!() }
+    pub fn start_alt(&self, task_piece: TaskPiece) -> Option<Meters> {
+        match task_piece {
+            TaskPiece::EntireTask => {
+                let fix = self.total_flight.fixes.first()?;
+                Some(fix.alt)
+            }
+            TaskPiece::Leg(leg_number) => {
+                let leg = (self.legs.get(leg_number))?.as_ref()?;
+                Some(leg.fixes.first()?.alt)
+            }
+        }
+    }
 
     pub fn climb_ground_speed(&self, task_piece: TaskPiece) -> Option<Kph> {
         self.get_avg_speed_of_segment(task_piece, false)
