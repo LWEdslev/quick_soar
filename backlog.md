@@ -10,7 +10,7 @@
   - **OK** Distance
   - **OK** Inside turnpoint
 - **OK** Segmenting
-- Calculation
+- **OK** Calculation
 
 ### Soup (target: 11 mar)
 

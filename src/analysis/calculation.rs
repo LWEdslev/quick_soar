@@ -331,6 +331,8 @@ impl Calculation {
         }
     }
 
+    // pub fn circling_radius(&self, task_piece: TaskPiece) -> Option<FloatMeters> { }
+
     fn get_avg_speed_of_segment(&self, task_piece: TaskPiece, is_glide: bool) -> Option<Kph> {
         let flight = match task_piece {
             TaskPiece::EntireTask => {
