@@ -12,11 +12,14 @@
 - **OK** Segmenting
 - **OK** Calculation
 
-### Soup (target: 11 mar)
+### Soup (target: 15 mar)
+- Reqwest
+- Tokio
+- Table extractor
 
-### XSSF  (target: 18 mar)
+### XSSF  (target: 23 mar)
 - Simple excel writer
-### GUI (target: 25 mar)
+### GUI (target: 30 mar)
 - Iced
 
 ### Later

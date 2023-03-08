@@ -8,6 +8,6 @@ edition = "2021"
 [dependencies]
 igc = "0.2.2"
 regex = "1.7.1"
-soup = "0.5.1"
+table-extract = "0.2.2"
 reqwest = "0.11.14"
 tokio = { version = "1.26.0", features = ["macros", "rt-multi-thread"] }
