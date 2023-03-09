@@ -1,9 +1,9 @@
+use std::fs::File;
+use std::{fs, io};
+use std::io::Read;
 use igc::util::Time;
+use reqwest::Error;
 use table_extract::Table;
-
-enum SoupError {
-    IncorrectURL,
-}
 
 pub struct SoaringSpot {
     contents: String,
@@ -11,10 +11,20 @@ pub struct SoaringSpot {
 }
 
 impl SoaringSpot {
-    pub async fn new(link: String) -> Option<Self> {
-        let html = reqwest::get(link).await.ok()?.text().await.ok()?;
-        let table = Table::find_first(&*html)?;
-        Some(Self { contents: html, table })
+    pub async fn new(link: String) -> Result<Self, String> {
+        let html = match reqwest::get(&link).await {
+            Ok(html) => { match html.text().await {
+                Ok(html) => html,
+                Err(_) => return Err(format!("Unable to decode HTML body of {}", &link)),
+            } },
+            Err(_) => return Err(format!("Unable to access {}", &link)),
+        };
+
+        let table = match Table::find_first(&*html) {
+            None => return Err(format!("No table found in {}", &link)),
+            Some(table) => table,
+        };
+        Ok(Self { contents: html, table })
     }
 
     pub fn get_download_links(&self) -> Vec<Option<String>> {
@@ -44,5 +54,16 @@ impl SoaringSpot {
             Some(Time::from_hms(h, m, s))
         }).collect::<Vec<Option<Time>>>()
     }
+}
+
+pub fn clear(path: &str) {
+    fs::remove_dir_all(path).unwrap_or(())
+}
+
+pub async fn download(link: &String, path: &str, index: usize) {
+    let filename = format!("{:0>3}.igc", index + 1);
+    let mut resp = reqwest::get(link).await.unwrap().bytes().await.unwrap();
+    let mut file = File::create(path.to_owned() + &*filename).unwrap();
+    io::copy(&mut resp.as_ref(), &mut file).expect("failed to copy content");
 }
 

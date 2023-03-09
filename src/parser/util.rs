@@ -1,4 +1,5 @@
 use std::{error::Error, fs::File, io::Read};
+use std::io::BufReader;
 use std::str::FromStr;
 use igc::{records::{BRecord, CRecordTurnpoint, Record}, util::{Compass, RawPosition, Time}};
 use regex::{Match, Regex};
@@ -62,8 +63,9 @@ impl TurnpointRecord {
 
 pub fn get_contents(path: &str) -> Result<String, Box<dyn Error>> {
     let mut file = File::open(path)?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
+    let mut buf = vec![];
+    file.read_to_end(&mut buf)?;
+    let contents = String::from_utf8_lossy(&*buf).to_string();
     Ok(contents)
 }
 
