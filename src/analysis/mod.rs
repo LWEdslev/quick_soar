@@ -1,3 +1,3 @@
 pub mod segmenting;
-mod util;
+pub mod util;
 pub mod calculation;

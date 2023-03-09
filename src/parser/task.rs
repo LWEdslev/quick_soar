@@ -79,10 +79,10 @@ pub struct Turnpoint {
 
 impl Turnpoint {
     pub(crate) fn parse(description: &str, loc: TurnpointRecord) -> Self {
-        let r1 = DescriptionElem::R1.get_element(description).unwrap();
-        let a1 = DescriptionElem::A1.get_element(description).unwrap();
-        let r2 = DescriptionElem::R2.get_element(description).unwrap();
-        let a2 = DescriptionElem::A2.get_element(description).unwrap();
+        let r1 = DescriptionElem::R1.get_element(description).unwrap_or(0);
+        let a1 = DescriptionElem::A1.get_element(description).unwrap_or(0);
+        let r2 = DescriptionElem::R2.get_element(description).unwrap_or(0);
+        let a2 = DescriptionElem::A2.get_element(description).unwrap_or(0);
         let aat = DescriptionElem::AAT.get_element(description).is_some();
         Self {
             latitude: loc.latitude,

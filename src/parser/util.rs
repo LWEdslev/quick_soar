@@ -75,7 +75,7 @@ pub fn get_contents(path: &str) -> Result<String, Box<dyn Error>> {
 fn map_parsed_contents<F,T>(contents: &str, f: F) -> T
     where F: FnOnce(&Vec<Record>) -> T
 {
-    let records: Vec<Record> = contents.lines().map(
+    let records: Vec<Record> = contents.lines().filter(|line| !line.is_empty()).map(
         |line| {
             Record::parse_line(line).unwrap_or_else(|e| panic!("unable to parse line: {line}, because error: {:?}", e))
         }
