@@ -1,3 +1,4 @@
+use igc::util::Date;
 use regex::Regex;
 
 pub struct PilotInfo{
