@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
 use crate::analysis::calculation::{Calculation, TaskPiece};
@@ -5,6 +6,7 @@ use crate::parser::pilot_info::PilotInfo;
 use crate::parser::task::Task;
 use umya_spreadsheet::*;
 use crate::analysis::util::Offsetable;
+use crate::excel::file_writer::BestWorstNone::Best;
 
 fn make_excel_file(path: &str, task: Task, data: Vec<(Option<u32>, Calculation, PilotInfo)>) {
     let path = std::path::Path::new("/analysis.xlsx");
@@ -153,19 +155,137 @@ impl ColumnHeader {
                     }
                 }).collect::<Vec<CellValue>>()
             }
-            ClimbRate => { todo!() }
-            CruiseSpeed => { todo!() }
-            CruiseDistance => { todo!() }
-            GlideRatio => { todo!() }
-            ExcessDistance => { todo!() }
-            Speed => { todo!() }
-            TurningPercentage => { todo!() }
-            ThermalAltLoss => { todo!() }
+            ClimbRate => {
+                data.iter().map(|d| {
+                    let calc = d.1;
+                    let climb_rate = calc.climb_rate(task_piece);
+                    match climb_rate {
+                        None => CellValue::None,
+                        Some(climb_rate) => CellValue::Float(climb_rate)
+                    }
+                }).collect::<Vec<CellValue>>()
+            }
+            CruiseSpeed => {
+                data.iter().map(|d| {
+                    let calc = d.1;
+                    let value = calc.glide_speed(task_piece);
+                    match value {
+                        None => CellValue::None,
+                        Some(value) => CellValue::Float(value)
+                    }
+                }).collect::<Vec<CellValue>>()
+            }
+            CruiseDistance => {
+                data.iter().map(|d| {
+                    let calc = d.1;
+                    let value = calc.glide_distance(task_piece);
+                    match value {
+                        None => CellValue::None,
+                        Some(value) => CellValue::Float(value)
+                    }
+                }).collect::<Vec<CellValue>>()
+            }
+            GlideRatio => {
+                data.iter().map(|d| {
+                    let calc = d.1;
+                    let value = calc.glide_ratio(task_piece);
+                    match value {
+                        None => CellValue::None,
+                        Some(value) => CellValue::Float(value)
+                    }
+                }).collect::<Vec<CellValue>>()
+            }
+            ExcessDistance => {
+                data.iter().map(|d| {
+                    let calc = d.1;
+                    let value = calc.excess_distance(task_piece);
+                    match value {
+                        None => CellValue::None,
+                        Some(value) => CellValue::Float(value)
+                    }
+                }).collect::<Vec<CellValue>>()
+            }
+            Speed => {
+                data.iter().map(|d| {
+                    let calc = d.1;
+                    let value = calc.speed(task_piece);
+                    match value {
+                        None => CellValue::None,
+                        Some(value) => CellValue::Float(value)
+                    }
+                }).collect::<Vec<CellValue>>()
+            }
+            TurningPercentage => {
+                data.iter().map(|d| {
+                    let calc = d.1;
+                    let value = calc.climb_percentage(task_piece);
+                    match value {
+                        None => CellValue::None,
+                        Some(value) => CellValue::Float(value)
+                    }
+                }).collect::<Vec<CellValue>>()
+            }
+            ThermalAltLoss => {
+                data.iter().map(|d| {
+                    let calc = d.1;
+                    let value = calc.thermal_height_loss(task_piece);
+                    match value {
+                        None => CellValue::None,
+                        Some(value) => CellValue::Float(value)
+                    }
+                }).collect::<Vec<CellValue>>()
+            }
         };
-        todo!()
+
+        let colors = if self.colorizable() {
+            use BestWorstNone::*;
+            let (high_val, low_val) = match self.is_highest_best_or_worst() {
+                Best => (Best, Worst),
+                Worst => (Worst, Best),
+                None => unreachable!()
+            };
+
+            let min_max_closure = |x: &&CellValue ,y: &&CellValue| match (x,y) {
+                (CellValue::Float(x_f), CellValue::Float(y_f)) => x_f.total_cmp(&y_f),
+                (CellValue::Int(x_i), CellValue::Int(y_i)) => x_i.cmp(&y_i),
+                _ => unreachable!(),
+            };
+            let max = values.iter()
+                .filter(|v| match v {
+                    CellValue::Float(_) | CellValue::Int(_) => true,
+                    _ => false,
+                })
+                .max_by(min_max_closure);
+
+            let min = values.iter()
+                .filter(|v| match v {
+                    CellValue::Float(_) | CellValue::Int(_) => true,
+                    _ => false,
+                })
+                .min_by(min_max_closure);
+
+            values.iter().map(|v| {
+                let is_max = max.is_some() && v.is_numerically_equal_to(max.unwrap());
+                let is_min = min.is_some() && v.is_numerically_equal_to(min.unwrap());
+                if is_max {
+                    high_val.clone()
+                } else if is_min {
+                    low_val.clone()
+                } else {
+                    None
+                }
+            }).collect::<Vec<BestWorstNone>>()
+        } else {
+            values.iter().map(|_| BestWorstNone::None).collect::<Vec<BestWorstNone>>()
+        };
+
+        values.iter().zip(colors).map(|(v,c)| {
+            DataCell::new(c, v.clone())
+        }).collect::<Vec<DataCell>>()
     }
 }
 
+#[derive(Clone)]
 enum CellValue {
     Float(f32),
     Int(i16),
@@ -173,11 +293,31 @@ enum CellValue {
     None,
 }
 
+impl CellValue {
+    fn is_numerically_equal_to(&self, to: &CellValue) -> bool {
+        match (self, to) {
+            (CellValue::Float(l), CellValue::Float(r)) => {l==r}
+            (CellValue::Int(l), CellValue::Int(r)) => {l==r}
+            _ => false,
+        }
+    }
+}
+
+#[derive(Clone)]
 enum BestWorstNone { Best, Worst, None }
 
 struct DataCell {
     extreme: BestWorstNone,
     value: CellValue,
+}
+
+impl DataCell {
+    fn new(extreme: BestWorstNone, value: CellValue) -> Self {
+        Self {
+            extreme,
+            value,
+        }
+    }
 }
 
 fn format_data(data: Vec<(Calculation, PilotInfo)>) -> HashMap<ColumnHeader, Vec<DataCell>> {

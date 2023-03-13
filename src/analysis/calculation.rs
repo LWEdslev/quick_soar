@@ -300,10 +300,10 @@ impl Calculation {
     pub fn finish_time(&self, task_piece: TaskPiece) -> Option<Time> {
         let flight = match task_piece {
             TaskPiece::EntireTask => Some(&self.total_flight),
-            TaskPiece::Leg(leg_number) => self.legs.get(leg_number),
-        }?;
+            TaskPiece::Leg(leg_number) => self.legs.get(leg_number)?.as_ref(),
+        };
 
-        let time_in_seconds = flight.fixes.last()?.timestamp;
+        let time_in_seconds = flight?.fixes.last()?.timestamp;
         Some(Time::from_hms((time_in_seconds / 3600) as u8, ((time_in_seconds % 3600) / 60) as u8, (time_in_seconds % 60) as u8))
     }
 
