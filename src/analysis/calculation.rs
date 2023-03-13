@@ -297,6 +297,16 @@ impl Calculation {
         }
     }
 
+    pub fn finish_time(&self, task_piece: TaskPiece) -> Option<Time> {
+        let flight = match task_piece {
+            TaskPiece::EntireTask => Some(&self.total_flight),
+            TaskPiece::Leg(leg_number) => self.legs.get(leg_number),
+        }?;
+
+        let time_in_seconds = flight.fixes.last()?.timestamp;
+        Some(Time::from_hms((time_in_seconds / 3600) as u8, ((time_in_seconds % 3600) / 60) as u8, (time_in_seconds % 60) as u8))
+    }
+
     pub fn start_alt(&self, task_piece: TaskPiece) -> Option<Meters> {
         match task_piece {
             TaskPiece::EntireTask => {
@@ -329,6 +339,55 @@ impl Calculation {
                 Some(leg.thermal_percentage())
             }
         }
+    }
+
+    pub fn glide_distance(&self, task_piece: TaskPiece) -> Option<FloatMeters> {
+        let flight = match task_piece {
+            TaskPiece::EntireTask => Some(&self.total_flight),
+            TaskPiece::Leg(leg_number) => self.legs.get(leg_number)?.as_ref(),
+        };
+
+        let each_glide_distance = flight?.segments.iter().filter(|seg| match seg {
+            Segment::Thermal(_) => false,
+            _ => true,
+        }).map(|glide| {
+            let inner = glide.inner();
+            if inner.len() < 1 { return 0. }
+            let first = inner.first().unwrap();
+            let last = inner.last().unwrap();
+            first.distance_to(last)
+        }).collect::<Vec<FloatMeters>>();
+
+        Some(each_glide_distance.iter().sum::<FloatMeters>() / each_glide_distance.len() as f32)
+    }
+
+    pub fn thermal_height_loss(&self, task_piece: TaskPiece) -> Option<Percentage> {
+        let flight = match task_piece {
+            TaskPiece::EntireTask => Some(&self.total_flight),
+            TaskPiece::Leg(leg_number) => self.legs.get(leg_number)?.as_ref(),
+        };
+
+        let alt_gains_and_loss = &flight?.segments.iter().filter(|seg| match seg {
+                Segment::Thermal(_) => false,
+                _ => true,
+            }
+        ).map(|thermal| {
+            let inner = thermal.inner();
+            let first = inner.first().unwrap();
+            let last = inner.last().unwrap();
+            let alt_gain = last.alt - first.alt;
+            let alt_loss = inner.windows(2).map(|w| {
+                let curr = &w[0];
+                let next = &w[1];
+                (curr.alt - next.alt).max(0)
+            }).sum::<Meters>();
+            (alt_gain, alt_loss)
+        }).collect::<Vec<(Meters, Meters)>>();
+
+        let total_alt_gain = alt_gains_and_loss.iter().map(|s| s.0).sum::<Meters>() as FloatMeters;
+        let total_alt_loss = alt_gains_and_loss.iter().map(|s| s.1).sum::<Meters>() as FloatMeters;
+
+        Some(100. * total_alt_loss / total_alt_gain)
     }
 
     // pub fn circling_radius(&self, task_piece: TaskPiece) -> Option<FloatMeters> { }
@@ -487,6 +546,7 @@ impl Calculation {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum TaskPiece {
     EntireTask,
     Leg(usize),

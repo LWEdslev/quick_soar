@@ -1,5 +1,4 @@
 use std::fs;
-use std::fs::File;
 use umya_spreadsheet::{CellStyle, CellValue, Color, reader, writer};
 
 #[tokio::main]
@@ -7,7 +6,7 @@ async fn main() {
     let time = std::time::Instant::now();
 
     let path = std::path::Path::new("./analysis.xlsx");
-    match fs::remove_file(path) { Ok(_) => {} , Err(_) => {} }; //remove if present
+    fs::remove_file(path).unwrap_or(()); //remove if present
     let mut book = umya_spreadsheet::new_file();
     book.remove_sheet(0).unwrap();
 
