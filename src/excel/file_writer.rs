@@ -10,6 +10,8 @@ use enum_iterator::{all, cardinality, first, last, next, previous, reverse_all, 
 use umya_spreadsheet::drawing::charts::LabelAlignmentValues;
 use umya_spreadsheet::helper::coordinate::CellCoordinates;
 
+const GOOD_COLOR: &str = "FFCCFFCC";
+const BAD_COLOR: &str = "FFFF99CC";
 
 pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>) {
     let path = std::path::Path::new(path);
@@ -18,9 +20,10 @@ pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>) {
 
     let entire_flight = book.new_sheet("Entire flight").unwrap();
     add_non_data_formatting(entire_flight, "DDMMYY", TaskPiece::EntireTask, &task);
-    task.points.iter().enumerate().for_each(|(index, point)| {
+    task.points.windows(2).enumerate().for_each(|(index, point)| {
         let ws = book.new_sheet("Placeholder").unwrap();
         add_non_data_formatting(ws, "DDMMYY", TaskPiece::Leg(index + 1), &task);
+
     });
 
     let columns = all::<ColumnHeader>().collect::<Vec<ColumnHeader>>();
@@ -30,9 +33,20 @@ pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>) {
     for (index, column) in columns.iter().enumerate() {
         let coord = CellCoordinates { row: 2, col: (index + 1) as u32 };
         add_column_to_worksheet(book.get_sheet_mut(&1).unwrap(), column, formatted_data.get(column).unwrap(), coord);
+        book.get_sheet_mut(&1).unwrap().get_row_dimension_mut(&2).set_height(120.);
     }
 
     book.remove_sheet(0).unwrap_or(()); //removes sheet that is created when the book is created
+
+    for (index, _) in task.points.windows(2).enumerate() {
+        let formatted_data = format_data(data, TaskPiece::Leg(index));
+        let ws = book.get_sheet_mut(&(index+1)).unwrap();
+        ws.get_row_dimension_mut(&2).set_height(120.);
+        for (index, column) in columns.iter().enumerate() {
+            let coord = CellCoordinates { row: 2, col: (index + 1) as u32 };
+            add_column_to_worksheet(ws, column, formatted_data.get(column).unwrap(), coord);
+        }
+    }
 
     writer::xlsx::write(&book, path).unwrap();
 
@@ -46,17 +60,25 @@ fn add_non_data_formatting(worksheet: &mut Worksheet, date: &str, task_piece: Ta
     worksheet.set_name(task_piece_string.clone());
     let date_cell = worksheet.get_cell_mut("A1");
     date_cell.set_value_from_string(date);
+    date_cell.get_style_mut().get_font_mut().set_name("Times New Roman").set_font_size(FontSize::default().set_val(10.).clone());
     let task_piece_cell = worksheet.get_cell_mut("B1");
     task_piece_cell.set_value_from_string(task_piece_string);
-    task_piece_cell.get_style_mut().set_background_color_solid(Color::COLOR_BLUE);
+    task_piece_cell.get_style_mut().set_background_color_solid("FF9999FF").get_font_mut().set_name("Times New Roman").set_font_size(FontSize::default().set_val(10.).clone()).set_bold(true);
+    task_piece_cell.get_style_mut().get_alignment_mut().set_horizontal(HorizontalAlignmentValues::Center);
     worksheet.add_merge_cells("B1:P1");
 }
 
 fn add_column_to_worksheet<T: Into<CellCoordinates>>(worksheet: &mut Worksheet, column: &ColumnHeader, data: &Vec<DataCell>, top_coord: T) {
     let top_coord = top_coord.into();
-    worksheet.get_cell_mut((top_coord.col, top_coord.row)).set_value_from_string(column.to_string());
+    let desc_cell = worksheet.get_cell_mut((top_coord.col, top_coord.row)).set_value_from_string(column.to_string());
+    desc_cell.get_style_mut().get_alignment_mut().set_horizontal(HorizontalAlignmentValues::Center);
+    desc_cell.get_style_mut().get_alignment_mut().set_text_rotation(90);
+    desc_cell.get_style_mut().get_font_mut().set_name("Times New Roman").set_font_size(FontSize::default().set_val(10.).clone());
     let top_coord = CellCoordinates { row: top_coord.row + 1, col: top_coord.col };
-    worksheet.get_cell_mut((top_coord.col, top_coord.row)).set_value_from_string(column.unit().unwrap_or(""));
+    let unit_cell = worksheet.get_cell_mut((top_coord.col, top_coord.row));
+        unit_cell.get_style_mut().get_font_mut().set_name("Times New Roman").set_font_size(FontSize::default().set_val(10.).clone()).set_bold(true);
+        unit_cell.set_value_from_string(column.unit().unwrap_or(""));
+        unit_cell.get_style_mut().get_alignment_mut().set_horizontal(HorizontalAlignmentValues::Center);
     let top_coord = CellCoordinates { row: top_coord.row + 2, col: top_coord.col }; //this moves down, and creates a gap
     for (index, d) in data.iter().enumerate() {
         let coord = CellCoordinates { row: top_coord.row + index as u32, col: top_coord.col };
@@ -71,23 +93,31 @@ fn draw_data_cell_at<T: Into<CellCoordinates>>(worksheet: &mut Worksheet, cell: 
         CellValue::Float(val) => {
             let cell = worksheet.get_cell_mut(coord).set_value_number(*val);
             cell.get_style_mut().get_numbering_format_mut().set_format_code(NumberingFormat::FORMAT_NUMBER_00);
+            cell.get_style_mut().get_alignment_mut().set_horizontal(HorizontalAlignmentValues::Center);
             cell
         }
         CellValue::Int(val) => {
-            worksheet.get_cell_mut(coord).set_value_number(*val as f64)
-
+            let cell = worksheet.get_cell_mut(coord).set_value_number(*val as f64);
+            cell.get_style_mut().get_alignment_mut().set_horizontal(HorizontalAlignmentValues::Center);
+            cell
         }
         CellValue::String(s) => {
-            worksheet.get_cell_mut(coord).set_value_from_string(s)
+            let cell = worksheet.get_cell_mut(coord).set_value_from_string(s);
+            cell.get_style_mut().get_alignment_mut().set_horizontal(HorizontalAlignmentValues::Center);
+            cell
         }
         CellValue::None => {
-            worksheet.get_cell_mut(coord).set_value_from_string("--")
+            let cell = worksheet.get_cell_mut(coord).set_value_from_string("---");
+            cell.get_style_mut().get_alignment_mut().set_horizontal(HorizontalAlignmentValues::Center);
+            cell
         }
     };
 
+    cell.get_style_mut().get_font_mut().set_name("Times New Roman").set_font_size(FontSize::default().set_val(10.).clone());
+
     match extreme {
-        Extreme::Best => { cell.get_style_mut().set_background_color(Color::COLOR_GREEN); },
-        Extreme::Worst => { cell.get_style_mut().set_background_color(Color::COLOR_RED); },
+        Extreme::Best => { cell.get_style_mut().set_background_color(GOOD_COLOR).get_font_mut().set_bold(true); },
+        Extreme::Worst => { cell.get_style_mut().set_background_color(BAD_COLOR).get_font_mut().set_bold(true); },
         Extreme::None => {},
     }
 
@@ -140,12 +170,12 @@ impl ColumnHeader {
         use ColumnHeader::*;
         match self {
             Ranking | Airplane | Callsign | StartTime | FinishTime | GlideRatio => None,
-            Distance => Some("km"),
-            StartAlt => Some("m"),
-            ClimbRate => Some("m/s"),
-            CruiseSpeed | Speed => Some("km/h"),
-            CruiseDistance => Some("km"),
-            ExcessDistance | ThermalAltLoss | TurningPercentage => Some("%"),
+            Distance => Some("[km]"),
+            StartAlt => Some("[m]"),
+            ClimbRate => Some("[m/s]"),
+            CruiseSpeed | Speed => Some("[km/h]"),
+            CruiseDistance => Some("[km]"),
+            ExcessDistance | ThermalAltLoss | TurningPercentage => Some("[%]"),
         }
     }
 

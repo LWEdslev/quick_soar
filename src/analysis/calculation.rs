@@ -387,6 +387,8 @@ impl Calculation {
         let total_alt_gain = alt_gains_and_loss.iter().map(|s| s.0).sum::<Meters>() as FloatMeters;
         let total_alt_loss = alt_gains_and_loss.iter().map(|s| s.1).sum::<Meters>() as FloatMeters;
 
+        if total_alt_gain.is_nan() {return None};
+
         Some(100. * total_alt_loss / total_alt_gain)
     }
 
