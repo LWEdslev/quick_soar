@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::Path;
 use umya_spreadsheet::{CellStyle, CellValue, Color, reader, writer};
 use quick_soar::analysis::calculation::Calculation;
 use quick_soar::excel::file_writer;
@@ -10,7 +11,7 @@ use analysis::util::Offsetable;
 async fn main() {
 
     let time = std::time::Instant::now();
-    let url = String::from("https://www.soaringspot.com/en_gb/sun-air-cup-junior-dm-2018-svaeveflyvecenter-arnborg-2018/results/junior-dm/task-9-on-2018-08-05/daily");
+    let url = String::from("https://www.soaringspot.com/en_gb/junior-world-gliding-championships-2022-tabor-2022/results/class-club/task-1-on-2022-07-31/daily");
     let spot = soaringspot::SoaringSpot::new(url).await.unwrap();
 
     let path = "igc_files/";
@@ -27,12 +28,16 @@ async fn main() {
 
     println!("{} ms since start", time.elapsed().as_millis());
 
+    let mut paths: Vec<_> = fs::read_dir("igc_files/").unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+    paths.sort_by_key(|dir| dir.path());
 
-    let paths = fs::read_dir("igc_files/").unwrap();
-
-    let contents = paths.into_iter().map(|path|
-        parser::util::get_contents(path.unwrap().path().display().to_string().as_str()).unwrap()
+    let contents = paths.into_iter().map(|path| {
+        parser::util::get_contents(path.path().display().to_string().as_str()).unwrap()
+        }
     );
+
 
     let start_times = spot.get_start_times();
 
