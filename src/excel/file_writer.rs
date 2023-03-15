@@ -134,6 +134,7 @@ enum ColumnHeader {
     StartTime,
     FinishTime,
     StartAlt,
+    ClimbSpeed,
     ClimbRate,
     CruiseSpeed,
     GlideRatio,
@@ -156,6 +157,7 @@ impl ColumnHeader {
             Distance => "Distance flown",
             FinishTime => "Finish time (Local)",
             ClimbRate => "Average rate of climb",
+            ClimbSpeed => "Average climb speed",
             CruiseSpeed => "Average cruise speed",
             CruiseDistance => "Average glide distance",
             GlideRatio => "Average glide ratio",
@@ -173,7 +175,7 @@ impl ColumnHeader {
             Distance => Some("[km]"),
             StartAlt => Some("[m]"),
             ClimbRate => Some("[m/s]"),
-            CruiseSpeed | Speed => Some("[km/h]"),
+            CruiseSpeed | Speed | ClimbSpeed => Some("[km/h]"),
             CruiseDistance => Some("[km]"),
             ExcessDistance | ThermalAltLoss | TurningPercentage => Some("[%]"),
         }
@@ -182,8 +184,8 @@ impl ColumnHeader {
     fn colorizable(&self) -> bool {
         use ColumnHeader::*;
         match self {
-            Ranking | Airplane | Callsign | Distance | StartTime | FinishTime => false,
-            StartAlt | ClimbRate | CruiseSpeed | CruiseDistance | GlideRatio
+            Ranking | Airplane  | Callsign | Distance | StartTime | FinishTime => false,
+            StartAlt | ClimbRate | ClimbSpeed | CruiseSpeed | CruiseDistance | GlideRatio
                 | ExcessDistance | Speed | TurningPercentage | ThermalAltLoss => true,
         }
     }
@@ -193,7 +195,7 @@ impl ColumnHeader {
         use Extreme::*;
         match self {
             StartAlt | ClimbRate | CruiseSpeed | CruiseDistance | GlideRatio | Speed => Best,
-            ExcessDistance | TurningPercentage | ThermalAltLoss => Worst,
+            ExcessDistance | TurningPercentage | ClimbSpeed | ThermalAltLoss => Worst,
             _ => None,
         }
     }
@@ -270,6 +272,16 @@ impl ColumnHeader {
                     let calc = &d;
                     let climb_rate = calc.climb_rate(task_piece);
                     match climb_rate {
+                        None => CellValue::None,
+                        Some(climb_rate) => CellValue::Float(climb_rate)
+                    }
+                }).collect::<Vec<CellValue>>()
+            }
+            ClimbSpeed => {
+                data.iter().map(|d| {
+                    let calc = &d;
+                    let climb_speed = calc.climb_ground_speed(task_piece);
+                    match climb_speed {
                         None => CellValue::None,
                         Some(climb_rate) => CellValue::Float(climb_rate)
                     }

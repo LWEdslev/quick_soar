@@ -14,7 +14,15 @@ impl Flight {
     pub fn make(fixes: Vec<Fix>) -> Self {
         let mut segments: Vec<Segment> = vec![];
         let start_alt = fixes.get(0).unwrap().alt;
-        let fixes = fixes.into_iter().filter(|f| f.alt > start_alt + 50).collect::<Vec<Fix>>();
+        let mut prev_sound_fix = fixes.get(0).unwrap().clone();
+        let fixes = fixes.into_iter().filter(|f| {
+            if f.timestamp < prev_sound_fix.timestamp {
+                false
+            } else {
+                prev_sound_fix = f.clone();
+                true
+            }
+        }).collect::<Vec<Fix>>();
         let fixes = fixes.into_iter().map(|f| Rc::new(f)).collect::<Vec<Rc<Fix>>>();
 
         const DEGREE_BOUNDARY: f32 = 120.;  //turn this many degrees in
@@ -41,7 +49,7 @@ impl Flight {
         let mut prev_time = fixes.first().unwrap().timestamp;
 
         for (fix, change) in fixes.iter().zip(bearing_changes) {
-            let delta_time = fix.timestamp - prev_time;
+            let delta_time = fix.timestamp.checked_sub(prev_time).unwrap_or(1);
             prev_time = fix.timestamp;
             time_buildup += delta_time;
             short_buildup.push(change);
@@ -117,7 +125,9 @@ impl Flight {
             for next_seg in segments {
                 let first_time = curr_seg.mut_inner().first().unwrap().timestamp;
                 let last_time = curr_seg.mut_inner().last().unwrap().timestamp;
-                let time_delta = last_time - first_time;
+                let time_delta = last_time.checked_sub(first_time);
+                if time_delta.is_none() { return };
+                let time_delta = time_delta.unwrap();
                 let log_time = time_delta as f32 / curr_seg.inner().len() as f32;
 
                 let how_many_to_take = (seconds as f32 / log_time) as usize;

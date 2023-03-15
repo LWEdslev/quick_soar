@@ -59,7 +59,7 @@ impl Calculation {
             Some(inner) => Some(Calculation::calculate_fixes(&inner.fixes)),
         }).collect();
 
-        let last_time = if legs.last().is_some() && legs.last().unwrap().is_some() {
+        let last_time = if legs.last().is_some() && legs.last().unwrap().is_some() && legs.last().as_ref().unwrap().as_ref().unwrap().fixes.last().is_some() {
             legs.last().as_ref().unwrap().as_ref().unwrap().fixes.last().unwrap().timestamp
         } else {
             flight.fixes.last().as_ref().unwrap().timestamp
@@ -251,7 +251,19 @@ impl Calculation {
             }).sum::<FloatMeters>()
         }).sum::<FloatMeters>();
 
-        Some((100. * total_glide_distance / task_dist) - 100.)
+        let thermals = flight_part.segments.iter().filter(|seg| match seg {
+            Segment::Thermal(_) => true,
+            _ => false,
+        });
+
+        let total_thermal_distance = thermals.map(|thermal| {
+            let thermal = thermal.inner();
+            let first = thermal.first().unwrap();
+            let last = thermal.last().unwrap();
+            first.distance_to(last)
+        }).sum::<FloatMeters>();
+
+        Some((100. * (total_glide_distance + total_thermal_distance) / task_dist) - 100.)
     }
 
     pub fn climb_rate(&self, task_piece: TaskPiece) -> Option<Mps> {
@@ -393,6 +405,10 @@ impl Calculation {
     }
 
     // pub fn circling_radius(&self, task_piece: TaskPiece) -> Option<FloatMeters> { }
+
+    // pub fn wind_thermal_gain
+
+    // pub fn time_below_500m_agl
 
     pub fn get_pilot_info(&self) -> &PilotInfo {
         &self.pilot_info
@@ -547,6 +563,16 @@ impl Calculation {
                     match (window[0], window[1]) {
                         (Some(start), Some(end)) => Some(flight.get_subflight(start, end)),
                         _ => None,
+                    }
+                }).collect::<Vec<Option<Flight>>>();
+
+                let legs = legs.into_iter().map(|leg| match leg {
+                    None => None,
+                    Some(leg) => {
+                        match leg.fixes.len() > 0 {
+                            true => Some(leg),
+                            false => None,
+                        }
                     }
                 }).collect::<Vec<Option<Flight>>>();
 

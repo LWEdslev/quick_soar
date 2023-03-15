@@ -11,7 +11,9 @@ use analysis::util::Offsetable;
 async fn main() {
 
     let time = std::time::Instant::now();
-    let url = String::from("https://www.soaringspot.com/en_gb/junior-world-gliding-championships-2022-tabor-2022/results/class-club/task-1-on-2022-07-31/daily");
+    let url = String::from(
+        "https://www.soaringspot.com/en_gb/junior-world-gliding-championships-2022-tabor-2022/results/class-club/task-3-on-2022-08-02/daily"
+    );
     let spot = soaringspot::SoaringSpot::new(url).await.unwrap();
 
     let path = "igc_files/";
@@ -48,12 +50,13 @@ async fn main() {
         let fixes = parser::util::get_fixes(&content);
         let flight = analysis::segmenting::Flight::make(fixes);
         let pilot_info = parser::pilot_info::PilotInfo::parse(&content);
+        println!("{}", pilot_info.comp_id);
         let time_zone = pilot_info.time_zone;
         let start_time = match start_time { None => None, Some(mut time) => { time.offset(-time_zone); Some(time.seconds_since_midnight()) } };
         let calculation = Calculation::new(task, flight, pilot_info, start_time);
         Some(calculation)
     }).collect::<Vec<Calculation>>();
-    soaringspot::clear(path);
+    //soaringspot::clear(path);
 
     println!("Now writing file");
 
