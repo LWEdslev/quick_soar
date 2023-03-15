@@ -368,8 +368,8 @@ impl Calculation {
         };
 
         let alt_gains_and_loss = &flight?.segments.iter().filter(|seg| match seg {
-                Segment::Thermal(_) => false,
-                _ => true,
+                Segment::Thermal(_) => true,
+                _ => false,
             }
         ).map(|thermal| {
             let inner = thermal.inner();
@@ -391,6 +391,14 @@ impl Calculation {
     }
 
     // pub fn circling_radius(&self, task_piece: TaskPiece) -> Option<FloatMeters> { }
+
+    pub fn get_pilot_info(&self) -> &PilotInfo {
+        &self.pilot_info
+    }
+
+    pub fn get_task(&self) -> &Task {
+        &self.task
+    }
 
     fn get_avg_speed_of_segment(&self, task_piece: TaskPiece, is_glide: bool) -> Option<Kph> {
         let flight = match task_piece {

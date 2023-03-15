@@ -6,16 +6,96 @@ use crate::parser::pilot_info::PilotInfo;
 use crate::parser::task::Task;
 use umya_spreadsheet::*;
 use crate::analysis::util::Offsetable;
-use crate::excel::file_writer::BestWorstNone::Best;
+use enum_iterator::{all, cardinality, first, last, next, previous, reverse_all, Sequence};
+use umya_spreadsheet::drawing::charts::LabelAlignmentValues;
+use umya_spreadsheet::helper::coordinate::CellCoordinates;
 
-fn make_excel_file(path: &str, task: Task, data: Vec<(Option<u32>, Calculation, PilotInfo)>) {
-    let path = std::path::Path::new("/analysis.xlsx");
-    match fs::remove_file(path) { Ok(_) => {} , Err(_) => {} }; //remove if present
-    let mut book = reader::xlsx::read(path).unwrap();
-    let ws = book.new_sheet("This is a sheet");
+
+pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>) {
+    let path = std::path::Path::new(path);
+    fs::remove_file(path).unwrap_or(()); //remove if present
+    let mut book = new_file();
+
+    let entire_flight = book.new_sheet("Entire flight").unwrap();
+    add_non_data_formatting(entire_flight, "DDMMYY", TaskPiece::EntireTask, &task);
+    task.points.iter().enumerate().for_each(|(index, point)| {
+        let ws = book.new_sheet("Placeholder").unwrap();
+        add_non_data_formatting(ws, "DDMMYY", TaskPiece::Leg(index + 1), &task);
+    });
+
+    let columns = all::<ColumnHeader>().collect::<Vec<ColumnHeader>>();
+
+    let formatted_data = format_data(data, TaskPiece::EntireTask);
+
+    for (index, column) in columns.iter().enumerate() {
+        let coord = CellCoordinates { row: 2, col: (index + 1) as u32 };
+        add_column_to_worksheet(book.get_sheet_mut(&1).unwrap(), column, formatted_data.get(column).unwrap(), coord);
+    }
+
+    book.remove_sheet(0).unwrap_or(()); //removes sheet that is created when the book is created
+
+    writer::xlsx::write(&book, path).unwrap();
 
 }
 
+fn add_non_data_formatting(worksheet: &mut Worksheet, date: &str, task_piece: TaskPiece, task: &Task) {
+    let task_piece_string = match task_piece {
+        TaskPiece::EntireTask => "Entire flight".to_string(),
+        TaskPiece::Leg(i) => format!("Leg {}", i),
+    };
+    worksheet.set_name(task_piece_string.clone());
+    let date_cell = worksheet.get_cell_mut("A1");
+    date_cell.set_value_from_string(date);
+    let task_piece_cell = worksheet.get_cell_mut("B1");
+    task_piece_cell.set_value_from_string(task_piece_string);
+    task_piece_cell.get_style_mut().set_background_color_solid(Color::COLOR_BLUE);
+    worksheet.add_merge_cells("B1:P1");
+}
+
+fn add_column_to_worksheet<T: Into<CellCoordinates>>(worksheet: &mut Worksheet, column: &ColumnHeader, data: &Vec<DataCell>, top_coord: T) {
+    let top_coord = top_coord.into();
+    worksheet.get_cell_mut((top_coord.col, top_coord.row)).set_value_from_string(column.to_string());
+    let top_coord = CellCoordinates { row: top_coord.row + 1, col: top_coord.col };
+    worksheet.get_cell_mut((top_coord.col, top_coord.row)).set_value_from_string(column.unit().unwrap_or(""));
+    let top_coord = CellCoordinates { row: top_coord.row + 2, col: top_coord.col }; //this moves down, and creates a gap
+    for (index, d) in data.iter().enumerate() {
+        let coord = CellCoordinates { row: top_coord.row + index as u32, col: top_coord.col };
+        draw_data_cell_at(worksheet, d, coord);
+    }
+}
+
+fn draw_data_cell_at<T: Into<CellCoordinates>>(worksheet: &mut Worksheet, cell: &DataCell, coord: T) {
+    let extreme = &cell.extreme;
+    let cell_value = &cell.value;
+    let cell = match cell_value {
+        CellValue::Float(val) => {
+            let cell = worksheet.get_cell_mut(coord).set_value_number(*val);
+            cell.get_style_mut().get_numbering_format_mut().set_format_code(NumberingFormat::FORMAT_NUMBER_00);
+            cell
+        }
+        CellValue::Int(val) => {
+            worksheet.get_cell_mut(coord).set_value_number(*val as f64)
+
+        }
+        CellValue::String(s) => {
+            worksheet.get_cell_mut(coord).set_value_from_string(s)
+        }
+        CellValue::None => {
+            worksheet.get_cell_mut(coord).set_value_from_string("--")
+        }
+    };
+
+    match extreme {
+        Extreme::Best => { cell.get_style_mut().set_background_color(Color::COLOR_GREEN); },
+        Extreme::Worst => { cell.get_style_mut().set_background_color(Color::COLOR_RED); },
+        Extreme::None => {},
+    }
+
+
+
+}
+
+#[derive(Debug, PartialEq, Sequence, Hash, Eq, Copy, Clone)]
 enum ColumnHeader {
     Ranking,
     Airplane,
@@ -26,8 +106,8 @@ enum ColumnHeader {
     StartAlt,
     ClimbRate,
     CruiseSpeed,
-    CruiseDistance,
     GlideRatio,
+    CruiseDistance,
     ExcessDistance,
     Speed,
     TurningPercentage,
@@ -78,9 +158,9 @@ impl ColumnHeader {
         }
     }
 
-    fn is_highest_best_or_worst(&self) -> BestWorstNone {
+    fn is_highest_best_or_worst(&self) -> Extreme {
         use ColumnHeader::*;
-        use BestWorstNone::*;
+        use Extreme::*;
         match self {
             StartAlt | ClimbRate | CruiseSpeed | CruiseDistance | GlideRatio | Speed => Best,
             ExcessDistance | TurningPercentage | ThermalAltLoss => Worst,
@@ -88,7 +168,7 @@ impl ColumnHeader {
         }
     }
 
-    fn get_data_cells(&self, data: Vec<(Option<u32>, &Calculation, &PilotInfo)>, task_piece: TaskPiece) -> Vec<DataCell> {
+    fn get_data_cells(&self, data: &Vec<Calculation>, task_piece: &TaskPiece) -> Vec<DataCell> {
         let task_piece = task_piece.clone();
         use ColumnHeader::*;
         let values = match self {
@@ -97,19 +177,19 @@ impl ColumnHeader {
             }
             Airplane => {
                 data.iter().map(|d| {
-                    let pilot_info = d.2;
+                    let pilot_info = &d.pilot_info;
                     CellValue::String(pilot_info.glider_type.clone())
                 }).collect::<Vec<CellValue>>()
             }
             Callsign => {
                 data.iter().map(|d| {
-                    let pilot_info = d.2;
+                    let pilot_info = &d.pilot_info;
                     CellValue::String(pilot_info.comp_id.clone())
                 }).collect::<Vec<CellValue>>()
             }
             Distance => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let dist = calc.distance(task_piece);
                     match dist {
                         None => CellValue::None,
@@ -119,9 +199,9 @@ impl ColumnHeader {
             }
             StartTime => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let start_time = calc.start_time(task_piece);
-                    let utc_offset = d.2.time_zone;
+                    let utc_offset = d.pilot_info.time_zone;
                     match start_time {
                         None => CellValue::None,
                         Some(mut start_time) => {
@@ -133,9 +213,9 @@ impl ColumnHeader {
             }
             FinishTime => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let finish_time = calc.finish_time(task_piece);
-                    let utc_offset = d.2.time_zone;
+                    let utc_offset = d.pilot_info.time_zone;
                     match finish_time {
                         None => CellValue::None,
                         Some(mut finish_time) => {
@@ -147,7 +227,7 @@ impl ColumnHeader {
             }
             StartAlt => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let alt = calc.start_alt(task_piece);
                     match alt {
                         None => CellValue::None,
@@ -157,7 +237,7 @@ impl ColumnHeader {
             }
             ClimbRate => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let climb_rate = calc.climb_rate(task_piece);
                     match climb_rate {
                         None => CellValue::None,
@@ -167,7 +247,7 @@ impl ColumnHeader {
             }
             CruiseSpeed => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let value = calc.glide_speed(task_piece);
                     match value {
                         None => CellValue::None,
@@ -177,17 +257,17 @@ impl ColumnHeader {
             }
             CruiseDistance => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let value = calc.glide_distance(task_piece);
                     match value {
                         None => CellValue::None,
-                        Some(value) => CellValue::Float(value)
+                        Some(value) => CellValue::Float(value / 1000.)
                     }
                 }).collect::<Vec<CellValue>>()
             }
             GlideRatio => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let value = calc.glide_ratio(task_piece);
                     match value {
                         None => CellValue::None,
@@ -197,7 +277,7 @@ impl ColumnHeader {
             }
             ExcessDistance => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let value = calc.excess_distance(task_piece);
                     match value {
                         None => CellValue::None,
@@ -207,7 +287,7 @@ impl ColumnHeader {
             }
             Speed => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let value = calc.speed(task_piece);
                     match value {
                         None => CellValue::None,
@@ -217,7 +297,7 @@ impl ColumnHeader {
             }
             TurningPercentage => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let value = calc.climb_percentage(task_piece);
                     match value {
                         None => CellValue::None,
@@ -227,7 +307,7 @@ impl ColumnHeader {
             }
             ThermalAltLoss => {
                 data.iter().map(|d| {
-                    let calc = d.1;
+                    let calc = &d;
                     let value = calc.thermal_height_loss(task_piece);
                     match value {
                         None => CellValue::None,
@@ -238,7 +318,7 @@ impl ColumnHeader {
         };
 
         let colors = if self.colorizable() {
-            use BestWorstNone::*;
+            use Extreme::*;
             let (high_val, low_val) = match self.is_highest_best_or_worst() {
                 Best => (Best, Worst),
                 Worst => (Worst, Best),
@@ -274,9 +354,9 @@ impl ColumnHeader {
                 } else {
                     None
                 }
-            }).collect::<Vec<BestWorstNone>>()
+            }).collect::<Vec<Extreme>>()
         } else {
-            values.iter().map(|_| BestWorstNone::None).collect::<Vec<BestWorstNone>>()
+            values.iter().map(|_| Extreme::None).collect::<Vec<Extreme>>()
         };
 
         values.iter().zip(colors).map(|(v,c)| {
@@ -304,15 +384,15 @@ impl CellValue {
 }
 
 #[derive(Clone)]
-enum BestWorstNone { Best, Worst, None }
+enum Extreme { Best, Worst, None }
 
 struct DataCell {
-    extreme: BestWorstNone,
+    extreme: Extreme,
     value: CellValue,
 }
 
 impl DataCell {
-    fn new(extreme: BestWorstNone, value: CellValue) -> Self {
+    fn new(extreme: Extreme, value: CellValue) -> Self {
         Self {
             extreme,
             value,
@@ -320,6 +400,11 @@ impl DataCell {
     }
 }
 
-fn format_data(data: Vec<(Calculation, PilotInfo)>) -> HashMap<ColumnHeader, Vec<DataCell>> {
-    todo!()
+fn format_data(data: &Vec<Calculation>, task_piece: TaskPiece) -> HashMap<ColumnHeader, Vec<DataCell>> {
+    let columns = all::<ColumnHeader>().collect::<Vec<ColumnHeader>>();
+    let mut map = HashMap::new();
+    for column in columns {
+        map.insert(column, column.get_data_cells(data, &task_piece));
+    };
+    map
 }

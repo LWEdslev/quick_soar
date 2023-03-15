@@ -69,7 +69,7 @@ impl TaskComponent {
 pub struct Turnpoint {
     pub latitude: f32,
     pub longitude: f32,
-    name: Option<String>,
+    pub name: Option<String>,
     pub r1: u16,
     pub a1: u16,
     pub r2: u16,
