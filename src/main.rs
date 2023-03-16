@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use igc::util::Time;
 use umya_spreadsheet::{CellStyle, CellValue, Color, reader, writer};
 use quick_soar::analysis::calculation::Calculation;
 use quick_soar::excel::file_writer;
@@ -56,7 +57,7 @@ async fn main() {
         let calculation = Calculation::new(task, flight, pilot_info, start_time);
         Some(calculation)
     }).collect::<Vec<Calculation>>();
-    //soaringspot::clear(path);
+    soaringspot::clear(path);
 
     println!("Now writing file");
 

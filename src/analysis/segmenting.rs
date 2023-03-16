@@ -11,21 +11,23 @@ pub struct Flight {
 }
 
 impl Flight {
-    pub fn make(fixes: Vec<Fix>) -> Self {
+    pub fn make(mut fixes: Vec<Fix>) -> Self {
         let mut segments: Vec<Segment> = vec![];
+        fixes.retain(|f| f.alt > 0);
         let start_alt = fixes.get(0).unwrap().alt;
         let mut prev_sound_fix = fixes.get(0).unwrap().clone();
-        let fixes = fixes.into_iter().filter(|f| {
+        fixes.retain(|f| {
             if f.timestamp < prev_sound_fix.timestamp {
                 false
             } else {
                 prev_sound_fix = f.clone();
                 true
-            }
-        }).collect::<Vec<Fix>>();
+            }});
+        /*let fixes = fixes.into_iter().filter(
+        }).collect::<Vec<Fix>>();*/
         let fixes = fixes.into_iter().map(|f| Rc::new(f)).collect::<Vec<Rc<Fix>>>();
 
-        const DEGREE_BOUNDARY: f32 = 120.;  //turn this many degrees in
+        const DEGREE_BOUNDARY: f32 = 150.;  //turn this many degrees in
         const TIME_WINDOW: u32 = 15;        //this much time
         const CONNECT_TIME: u32 = 35;       //time one has to stop thermalling for it to be a glide
         const THERMAL_BACKSET: usize = 8;  //correcting factor for backwards looking thermal model should be roughly TIME_WINDOW / 2
@@ -45,16 +47,17 @@ impl Flight {
         let mut buildup: Vec<Rc<Fix>> = vec![];
         let mut buildup_is_glide = true;
         let mut time_buildup = 0;
-        let mut short_buildup: Vec<f32> = vec![];
+        let mut short_buildup: Vec<(u32, f32)> = vec![];
         let mut prev_time = fixes.first().unwrap().timestamp;
 
         for (fix, change) in fixes.iter().zip(bearing_changes) {
             let delta_time = fix.timestamp.checked_sub(prev_time).unwrap_or(1);
             prev_time = fix.timestamp;
             time_buildup += delta_time;
-            short_buildup.push(change);
+            short_buildup.push((fix.timestamp, change));
+            //if fix.timestamp >= 39497 { println!("") }
             buildup.push(Rc::clone(&fix));
-            let total_degree_change = short_buildup.iter().sum::<f32>();
+            let total_degree_change = short_buildup.iter().map(|b|b.1).sum::<f32>();
             if (total_degree_change / (time_buildup as f32)).abs() >= target {
                 //We are turning!
                 match buildup_is_glide {
@@ -110,10 +113,13 @@ impl Flight {
                 }
             }
 
+            time_buildup = short_buildup.last().unwrap().0 - short_buildup.first().unwrap().0;
             while time_buildup >= TIME_WINDOW {
                 short_buildup.remove(0);
-                time_buildup -= delta_time;
+                time_buildup = short_buildup.last().unwrap().0 - short_buildup.first().unwrap().0;
             }
+
+
 
         }
 
@@ -173,7 +179,7 @@ impl Flight {
             segments,
         };
         flight.combine_segments();
-
+        let flight = flight;
         flight
     }
 

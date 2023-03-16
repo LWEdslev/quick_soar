@@ -41,8 +41,6 @@ pub struct Calculation {
     pub legs: Vec<Option<Flight>>,
     pub total_flight: Flight,
     pub task: Task,
-    pub calculated_fixes: Vec<Rc<CalculatedFix>>, //fixes for entire flight
-    pub calculated_legs: Vec<Option<Vec<Rc<CalculatedFix>>>>, //fixes of legs for entire
     pub pilot_info: PilotInfo,
 }
 
@@ -50,14 +48,7 @@ impl Calculation {
     pub fn new(task: Task, flight: Flight, pilot_info: PilotInfo, start_time: Option<u32>) -> Calculation {
         let fixes = flight.fixes.iter().map(|f| Rc::clone(&f)).collect::<Vec<Rc<Fix>>>();
 
-        let calculated_fixes = Calculation::calculate_fixes(&fixes);
-
         let legs = Calculation::make_legs(&fixes, &task, start_time, &flight);
-
-        let calculated_legs = legs.iter().map(|opt| match opt {
-            None => None,
-            Some(inner) => Some(Calculation::calculate_fixes(&inner.fixes)),
-        }).collect();
 
         let last_time = if legs.last().is_some() && legs.last().unwrap().is_some() && legs.last().as_ref().unwrap().as_ref().unwrap().fixes.last().is_some() {
             legs.last().as_ref().unwrap().as_ref().unwrap().fixes.last().unwrap().timestamp
@@ -71,8 +62,6 @@ impl Calculation {
             legs,
             total_flight: flight,
             task,
-            calculated_fixes,
-            calculated_legs,
             pilot_info,
         }
     }
@@ -393,14 +382,13 @@ impl Calculation {
                 let next = &w[1];
                 (curr.alt - next.alt).max(0)
             }).sum::<Meters>();
+
             (alt_gain, alt_loss)
         }).collect::<Vec<(Meters, Meters)>>();
 
         let total_alt_gain = alt_gains_and_loss.iter().map(|s| s.0).sum::<Meters>() as FloatMeters;
         let total_alt_loss = alt_gains_and_loss.iter().map(|s| s.1).sum::<Meters>() as FloatMeters;
-
         if total_alt_gain.is_nan() {return None};
-
         Some(100. * total_alt_loss / total_alt_gain)
     }
 
