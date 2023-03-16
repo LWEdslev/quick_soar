@@ -1,7 +1,4 @@
 use std::fs;
-use std::path::Path;
-use igc::util::Time;
-use umya_spreadsheet::{CellStyle, CellValue, Color, reader, writer};
 use quick_soar::analysis::calculation::Calculation;
 use quick_soar::excel::file_writer;
 use quick_soar::{analysis, parser, web_handling};

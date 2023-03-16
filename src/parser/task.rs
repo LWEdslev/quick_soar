@@ -1,4 +1,3 @@
-use std::error::Error;
 use igc::util::Time;
 use regex::Regex;
 use crate::parser::util;

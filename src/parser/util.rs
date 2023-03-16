@@ -1,8 +1,7 @@
 use std::{error::Error, fs::File, io::Read};
-use std::io::BufReader;
 use std::str::FromStr;
 use igc::{records::{BRecord, CRecordTurnpoint, Record}, util::{Compass, RawPosition, Time}};
-use regex::{Match, Regex};
+use regex::Regex;
 
 #[derive(Clone)]
 pub struct Fix {

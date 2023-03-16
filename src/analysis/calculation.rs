@@ -1,6 +1,4 @@
-use std::iter::Filter;
 use std::rc::Rc;
-use std::slice::Iter;
 use igc::util::Time;
 use crate::analysis::segmenting::{Flight, Segment};
 use crate::parser::pilot_info::PilotInfo;
@@ -14,28 +12,6 @@ type Kph = f32;
 type Mps = f32;
 type Percentage = f32;
 
-pub struct CalculatedFix {
-    distance: FloatMeters,
-    alt_gain: Meters,
-    time_delta: Seconds,
-    timestamp: Seconds,
-
-}
-
-impl CalculatedFix {
-    fn new(from: &Fix, to: &Fix) -> Self {
-        let distance = from.distance_to(to);
-        let alt_gain = from.alt - to.alt;
-        let time_delta = to.timestamp - from.timestamp;
-        Self {
-            distance,
-            alt_gain,
-            time_delta,
-            timestamp: from.timestamp,
-
-        }
-    }
-}
 
 pub struct Calculation {
     pub legs: Vec<Option<Flight>>,
@@ -45,7 +21,7 @@ pub struct Calculation {
 }
 
 impl Calculation {
-    pub fn new(task: Task, flight: Flight, pilot_info: PilotInfo, start_time: Option<u32>) -> Calculation {
+    pub fn new(task: Task, flight: Flight, pilot_info: PilotInfo, start_time: Option<Seconds>) -> Calculation {
         let fixes = flight.fixes.iter().map(|f| Rc::clone(&f)).collect::<Vec<Rc<Fix>>>();
 
         let legs = Calculation::make_legs(&fixes, &task, start_time, &flight);
@@ -437,22 +413,10 @@ impl Calculation {
         Some(3.6 * (total_climb_dist / (total_climb_time as f32)))
     }
 
-    fn calculate_fixes(fixes: &Vec<Rc<Fix>>) -> Vec<Rc<CalculatedFix>> {
-        if fixes.is_empty() {return vec![]};
-        let mut fixes = fixes.iter();
-        let mut prev_fix = fixes.next().unwrap();
-        fixes.map(|curr_fix| {
-            let calc_fix = CalculatedFix::new(prev_fix, curr_fix);
-            prev_fix = curr_fix;
-            Rc::new(calc_fix)
-        }).collect::<Vec<Rc<CalculatedFix>>>()
-    }
-
-    fn make_legs(fixes: &Vec<Rc<Fix>>, task: &Task, start_time: Option<u32>, flight: &Flight) -> Vec<Option<Flight>> {
-
+    fn make_legs(fixes: &Vec<Rc<Fix>>, task: &Task, start_time: Option<Seconds>, flight: &Flight) -> Vec<Option<Flight>> {
         let mut turnpoints = task.points.iter();
-        let start_point = turnpoints.next().unwrap();
-        if start_time.is_none() { return turnpoints.map(|t| None).collect::<Vec<Option<Flight>>>()}; //No start should give no legs
+        let _start_point = turnpoints.next().unwrap();
+        if start_time.is_none() { return turnpoints.map(|_| None).collect::<Vec<Option<Flight>>>()}; //No start should give no legs
         let start_time = start_time.unwrap();
         let mut fixes = fixes.iter().filter(|fix| fix.timestamp >= start_time); //get fixes after start
         let start_fix = fixes.next();
@@ -479,7 +443,7 @@ impl Calculation {
                 curr_time = found;
                 found
             }
-        }).collect::<Vec<Option<u32>>>();
+        }).collect::<Vec<Option<Seconds>>>();
         leg_times.insert(0, Some(start_time));
         inside_turnpoints.insert(0, vec![Rc::clone(start_fix.unwrap())]); //add start as the first turnpoint
 
@@ -513,7 +477,7 @@ impl Calculation {
                 //at this point |inside_turnpoints| == |task.points|
 
                 let start_fixes = inside_turnpoints.remove(0);
-                let finish_fixes = inside_turnpoints.pop();
+                let _finish_fixes = inside_turnpoints.pop();
                 let mut prev_optimal = Some(Rc::clone(start_fixes.first().unwrap()));
                 assert_eq!(inside_turnpoints.len(), task.points.windows(3).count());
                 let mut leg_times = task.points.windows(3).zip(inside_turnpoints.iter()).map(|(window, fixes)| {
@@ -541,7 +505,7 @@ impl Calculation {
                     }
 
 
-                }).collect::<Vec<Option<u32>>>();
+                }).collect::<Vec<Option<Seconds>>>();
                 leg_times.insert(0, Some(start_time)); //add start
                 leg_times.push(match finish_fix { //push finish
                     None => None,

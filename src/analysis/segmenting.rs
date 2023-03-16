@@ -1,9 +1,7 @@
-use std::ops::Deref;
 use std::rc::Rc;
 use igc::util::Time;
 use crate::parser::util::Fix;
-use crate::{analysis, parser};
-use crate::analysis::util::Offsetable;
+use crate::analysis;
 
 pub struct Flight {
     pub fixes: Vec<Rc<Fix>>,
@@ -14,7 +12,6 @@ impl Flight {
     pub fn make(mut fixes: Vec<Fix>) -> Self {
         let mut segments: Vec<Segment> = vec![];
         fixes.retain(|f| f.alt > 0);
-        let start_alt = fixes.get(0).unwrap().alt;
         let mut prev_sound_fix = fixes.get(0).unwrap().clone();
         fixes.retain(|f| {
             if f.timestamp < prev_sound_fix.timestamp {
@@ -137,7 +134,6 @@ impl Flight {
                 let log_time = time_delta as f32 / curr_seg.inner().len() as f32;
 
                 let how_many_to_take = (seconds as f32 / log_time) as usize;
-                let curr_size = curr_seg.inner().len();
 
                 let mut fixes_to_move: Vec<Rc<Fix>> = if curr_seg.mut_inner().len() > how_many_to_take {
                     let last_index = curr_seg.mut_inner().len();
@@ -145,9 +141,7 @@ impl Flight {
                 } else {
                     curr_seg.mut_inner().drain(..).collect()
                 };
-                let mut debug = next_seg.inner().len();
                 add_fixes_to_segment(next_seg, &mut fixes_to_move);
-                debug = next_seg.inner().len();
                 curr_seg = next_seg;
             }
         }
@@ -253,7 +247,7 @@ impl Flight {
             .collect::<Vec<Rc<Fix>>>();
         let segments = self.segments.iter()
             .filter(|s| s.inner().last().unwrap().timestamp >= from && s.inner().first().unwrap().timestamp < to)
-            .map(|mut s| {
+            .map(|s| {
                 let inner = s.inner().clone().into_iter().filter(|fix| (from..to).contains(&fix.timestamp)).collect();
                 match s {
                     Segment::Glide(_) => Segment::Glide(inner),
@@ -361,22 +355,11 @@ impl Segment {
         }
     }
 
-    fn as_try(&self) -> Segment {
-        Segment::Try(self.inner().clone())
-    }
-
     pub fn inner(&self) -> &Vec<Rc<Fix>> {
         match self {
             Segment::Glide(v) => v,
             Segment::Thermal(v) => v,
             Segment::Try(v) => v,
-        }
-    }
-
-    fn is_glide(&self) -> bool {
-        match self {
-            Segment::Thermal(_) => false,
-            _ => true,
         }
     }
 }

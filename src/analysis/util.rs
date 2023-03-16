@@ -18,12 +18,6 @@ impl Fix {
         distance_between(from, to)
     }
 
-    fn is_inside(&self, turnpoint: &Turnpoint) -> bool {
-        turnpoint.is_inside(self)
-    }
-
-
-
     fn bearing_to(&self, fix: &Fix) -> Degrees {
         let delta_lat = fix.latitude - self.latitude ;
         let delta_lon = fix.longitude - self.longitude;

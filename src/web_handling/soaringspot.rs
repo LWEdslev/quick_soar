@@ -1,12 +1,9 @@
 use std::fs::File;
 use std::{fs, io};
-use std::io::Read;
 use igc::util::Time;
-use reqwest::Error;
 use table_extract::Table;
 
 pub struct SoaringSpot {
-    contents: String,
     table: Table
 }
 
@@ -24,7 +21,7 @@ impl SoaringSpot {
             None => return Err(format!("No table found in {}", &link)),
             Some(table) => table,
         };
-        Ok(Self { contents: html, table })
+        Ok(Self { table })
     }
 
     pub fn get_download_links(&self) -> Vec<Option<String>> {
@@ -62,7 +59,7 @@ pub fn clear(path: &str) {
 
 pub async fn download(link: &String, path: &str, index: usize) {
     let filename = format!("{:0>3}.igc", index + 1);
-    let mut resp = reqwest::get(link).await.unwrap().bytes().await.unwrap();
+    let resp = reqwest::get(link).await.unwrap().bytes().await.unwrap();
     let mut file = File::create(path.to_owned() + &*filename).unwrap();
     io::copy(&mut resp.as_ref(), &mut file).expect("failed to copy content");
 }

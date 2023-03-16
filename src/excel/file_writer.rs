@@ -1,13 +1,10 @@
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
 use crate::analysis::calculation::{Calculation, TaskPiece};
-use crate::parser::pilot_info::PilotInfo;
 use crate::parser::task::Task;
 use umya_spreadsheet::*;
 use crate::analysis::util::Offsetable;
-use enum_iterator::{all, cardinality, first, last, next, previous, reverse_all, Sequence};
-use umya_spreadsheet::drawing::charts::LabelAlignmentValues;
+use enum_iterator::{all, Sequence};
 use umya_spreadsheet::helper::coordinate::CellCoordinates;
 
 const GOOD_COLOR: &str = "FFCCFFCC";
@@ -19,10 +16,10 @@ pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>) {
     let mut book = new_file();
 
     let entire_flight = book.new_sheet("Entire flight").unwrap();
-    add_non_data_formatting(entire_flight, "DDMMYY", TaskPiece::EntireTask, &task);
-    task.points.windows(2).enumerate().for_each(|(index, point)| {
+    add_non_data_formatting(entire_flight, "DDMMYY", TaskPiece::EntireTask);
+    task.points.windows(2).enumerate().for_each(|(index, _)| {
         let ws = book.new_sheet("Placeholder").unwrap();
-        add_non_data_formatting(ws, "DDMMYY", TaskPiece::Leg(index + 1), &task);
+        add_non_data_formatting(ws, "DDMMYY", TaskPiece::Leg(index + 1));
 
     });
 
@@ -52,7 +49,7 @@ pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>) {
 
 }
 
-fn add_non_data_formatting(worksheet: &mut Worksheet, date: &str, task_piece: TaskPiece, task: &Task) {
+fn add_non_data_formatting(worksheet: &mut Worksheet, date: &str, task_piece: TaskPiece) {
     let task_piece_string = match task_piece {
         TaskPiece::EntireTask => "Entire flight".to_string(),
         TaskPiece::Leg(i) => format!("Leg {}", i),
