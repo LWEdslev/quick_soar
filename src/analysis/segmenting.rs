@@ -11,7 +11,7 @@ pub struct Flight {
 impl Flight {
     pub fn make(mut fixes: Vec<Fix>) -> Self {
         let mut segments: Vec<Segment> = vec![];
-        fixes.retain(|f| f.alt > 0);
+        fixes.retain(|f| f.is_valid());
         let mut prev_sound_fix = fixes.get(0).unwrap().clone();
         fixes.retain(|f| {
             if f.timestamp < prev_sound_fix.timestamp {

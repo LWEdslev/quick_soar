@@ -1,6 +1,7 @@
 use std::{error::Error, fs::File, io::Read};
 use std::str::FromStr;
 use igc::{records::{BRecord, CRecordTurnpoint, Record}, util::{Compass, RawPosition, Time}};
+use igc::records::FixValid;
 use regex::Regex;
 
 #[derive(Clone)]
@@ -9,6 +10,7 @@ pub struct Fix {
     pub latitude: f32, //positive is north
     pub longitude: f32, //positive is east
     pub alt: i16,
+    valid: bool,
 }
 
 impl Fix {
@@ -20,7 +22,8 @@ impl Fix {
             timestamp: Time::from_hms(h,m,s).seconds_since_midnight(),
             latitude: lat,
             longitude: lon,
-            alt: rec.gps_alt
+            alt: rec.gps_alt,
+            valid: rec.fix_valid == FixValid::Valid
         }
     }
     pub fn to_string(&self) -> String {
@@ -31,6 +34,10 @@ impl Fix {
                 self.latitude,
                 self.longitude,
                 self.alt)
+    }
+
+    pub(crate) fn is_valid(&self) -> bool {
+        self.valid
     }
 }
 

@@ -10,7 +10,7 @@ async fn main() {
 
     let time = std::time::Instant::now();
     let url = String::from(
-        "https://www.soaringspot.com/en_gb/junior-world-gliding-championships-2022-tabor-2022/results/class-club/task-3-on-2022-08-02/daily"
+        "https://www.soaringspot.com/en_gb/arnborg-easter-cup-svaeveflyvecenter-arnborg-2023/results/multiclass/task-3-on-2023-04-08/daily"
     );
     let spot = soaringspot::SoaringSpot::new(url).await.unwrap();
 
@@ -40,10 +40,11 @@ async fn main() {
 
 
     let start_times = spot.get_start_times();
+    let speeds = spot.get_speeds();
 
     println!("{} ms since start, before calcs", time.elapsed().as_millis());
 
-    let calculations = contents.zip(start_times).filter_map(|(content, start_time)| {
+    let calculations = contents.zip(start_times).zip(speeds).filter_map(|((content, start_time), speed)| {
         let task = parser::task::Task::parse(&content).ok()?;
         let fixes = parser::util::get_fixes(&content);
         let flight = analysis::segmenting::Flight::make(fixes);
@@ -51,7 +52,7 @@ async fn main() {
         println!("{}", pilot_info.comp_id);
         let time_zone = pilot_info.time_zone;
         let start_time = match start_time { None => None, Some(mut time) => { time.offset(-time_zone); Some(time.seconds_since_midnight()) } };
-        let calculation = Calculation::new(task, flight, pilot_info, start_time);
+        let calculation = Calculation::new(task, flight, pilot_info, start_time, speed);
         Some(calculation)
     }).collect::<Vec<Calculation>>();
     soaringspot::clear(path);

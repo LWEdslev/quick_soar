@@ -3,6 +3,8 @@ use std::{fs, io};
 use igc::util::Time;
 use table_extract::Table;
 
+type Kph = f32;
+
 pub struct SoaringSpot {
     table: Table
 }
@@ -50,6 +52,15 @@ impl SoaringSpot {
             let (h, m, s) = (time_string[0].parse().ok()?, time_string[1].parse().ok()?, time_string[2].parse().ok()?);
             Some(Time::from_hms(h, m, s))
         }).collect::<Vec<Option<Time>>>()
+    }
+
+    pub fn get_speeds(&self) -> Vec<Option<Kph>> {
+        self.table.iter().map(|row| {
+            let speed_string = row.get("Speed")?
+                .trim().to_string().split("&").next()?
+                .parse::<f32>().ok()?;
+            Some(speed_string)
+        }).collect::<Vec<Option<Kph>>>()
     }
 }
 
