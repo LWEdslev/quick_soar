@@ -5,18 +5,19 @@ use crate::parser::task::Task;
 use umya_spreadsheet::*;
 use crate::analysis::util::Offsetable;
 use enum_iterator::{all, Sequence};
+use igc::util::Date;
 use umya_spreadsheet::helper::coordinate::CellCoordinates;
 
 const GOOD_COLOR: &str = "FFCCFFCC";
 const BAD_COLOR: &str = "FFFF99CC";
 
-pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>) {
+pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>, date: Date) {
     let path = std::path::Path::new(path);
     fs::remove_file(path).unwrap_or(()); //remove if present
     let mut book = new_file();
 
     let entire_flight = book.new_sheet("Entire flight").unwrap();
-    add_non_data_formatting(entire_flight, "DDMMYY", TaskPiece::EntireTask);
+    add_non_data_formatting(entire_flight, format!("{}-{}-{}", date.day, date.month, date.year).as_str(), TaskPiece::EntireTask);
     task.points.windows(2).enumerate().for_each(|(index, _)| {
         let ws = book.new_sheet("Placeholder").unwrap();
         add_non_data_formatting(ws, "DDMMYY", TaskPiece::Leg(index + 1));
@@ -57,7 +58,8 @@ fn add_non_data_formatting(worksheet: &mut Worksheet, date: &str, task_piece: Ta
     worksheet.set_name(task_piece_string.clone());
     let date_cell = worksheet.get_cell_mut("A1");
     date_cell.set_value_from_string(date);
-    date_cell.get_style_mut().get_font_mut().set_name("Times New Roman").set_font_size(FontSize::default().set_val(10.).clone());
+    date_cell.get_style_mut().get_font_mut().set_name("Times New Roman").set_font_size(FontSize::default().set_val(10.).clone()).set_bold(true);
+    date_cell.get_style_mut().get_alignment_mut().set_horizontal(HorizontalAlignmentValues::Center);
     let task_piece_cell = worksheet.get_cell_mut("B1");
     task_piece_cell.set_value_from_string(task_piece_string);
     task_piece_cell.get_style_mut().set_background_color_solid("FF9999FF").get_font_mut().set_name("Times New Roman").set_font_size(FontSize::default().set_val(10.).clone()).set_bold(true);

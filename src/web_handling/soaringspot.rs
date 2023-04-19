@@ -4,6 +4,7 @@ use igc::util::Time;
 use table_extract::Table;
 
 type Kph = f32;
+type FloatMeters = f32;
 
 pub struct SoaringSpot {
     table: Table
@@ -61,6 +62,12 @@ impl SoaringSpot {
                 .parse::<f32>().ok()?;
             Some(speed_string)
         }).collect::<Vec<Option<Kph>>>()
+    }
+    pub fn get_distances(&self) -> Vec<Option<FloatMeters>> {
+        self.table.iter().map(|row| {
+            let dist = row.get("Distance")?.trim().to_string().split("&").next()?.parse::<f32>().ok()?;
+            Some(dist * 1000.)
+        }).collect::<Vec<Option<FloatMeters>>>()
     }
 }
 

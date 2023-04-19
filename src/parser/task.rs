@@ -1,4 +1,4 @@
-use igc::util::Time;
+use igc::util::{Date, Time};
 use regex::Regex;
 use crate::parser::util;
 use crate::parser::util::TurnpointRecord;

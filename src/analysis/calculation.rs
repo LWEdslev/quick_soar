@@ -18,11 +18,20 @@ pub struct Calculation {
     pub total_flight: Flight,
     pub task: Task,
     pub pilot_info: PilotInfo,
-    speed: Option<Kph>
+    speed: Option<Kph>,
+    distance: Option<FloatMeters>,
 }
 
 impl Calculation {
-    pub fn new(task: Task, flight: Flight, pilot_info: PilotInfo, start_time: Option<Seconds>, speed: Option<Kph>) -> Calculation {
+    pub fn new(
+        task: Task,
+        flight: Flight,
+        pilot_info: PilotInfo,
+        start_time: Option<Seconds>,
+        speed: Option<Kph>,
+        distance: Option<FloatMeters>
+    ) -> Calculation {
+
         let fixes = flight.fixes.iter().map(|f| Rc::clone(&f)).collect::<Vec<Rc<Fix>>>();
 
         let legs = Calculation::make_legs(&fixes, &task, start_time, &flight);
@@ -41,6 +50,7 @@ impl Calculation {
             task,
             pilot_info,
             speed,
+            distance,
         }
     }
 
@@ -107,28 +117,9 @@ impl Calculation {
     }
 
     pub fn distance(&self, task_piece: TaskPiece) -> Option<FloatMeters> {
-        fn get_dist_over_legs(legs: &Vec<Option<Flight>>) -> Option<FloatMeters> {
-            Some(legs.iter().map(|leg| {
-                match leg {
-                    None => 0.,
-                    Some(leg) => leg.fixes.first().unwrap().distance_to(leg.fixes.last().unwrap()),
-                }
-            }).sum())
-        }
         match task_piece {
             TaskPiece::EntireTask => {
-                let task = &self.task;
-                match task.task_type {
-                    TaskType::AAT(_) => get_dist_over_legs(&self.legs),
-                    TaskType::AST => {
-                        if self.speed.is_none() { return get_dist_over_legs(&self.legs) };
-                        Some(task.points.windows(2).map(|w| {
-                            let curr = &w[0].inner();
-                            let next = &w[1].inner();
-                            curr.distance_to(next)
-                        }).sum())
-                    }
-                }
+                self.distance
             }
             TaskPiece::Leg(leg_number) => {
                 let leg = self.legs.get(leg_number)?;
@@ -435,7 +426,6 @@ impl Calculation {
             }
             TaskType::AAT(_) => {
                 //Getting ordered non-overlapping of consecutive sectors inside turnpoints
-                let finish_fix = inside_turnpoints.last().unwrap().first();
                 let mut inside_turnpoints = inside_turnpoints.iter().zip(leg_times.windows(2)).map(|(v, leg_time)| {
                     let start_leg = leg_time[0];
                     let end_leg = leg_time[1];
@@ -444,6 +434,10 @@ impl Calculation {
                     &&  end_leg.is_some() && end_leg.unwrap() > fix.timestamp
                     ).map(|f| Rc::clone(f)).collect::<Vec<Rc<Fix>>>()
                 }).collect::<Vec<Vec<Rc<Fix>>>>();
+                let finish_fix = fixes.iter().filter(|fix| match leg_times.last() {
+                    Some(Some(time)) => time == &fix.timestamp,
+                    _ => false,
+                }).next();
                 inside_turnpoints.push(match finish_fix {
                     None => vec![],
                     Some(fix) => vec![Rc::clone(fix)],
@@ -451,7 +445,7 @@ impl Calculation {
                 //at this point |inside_turnpoints| == |task.points|
 
                 let start_fixes = inside_turnpoints.remove(0);
-                let _finish_fixes = inside_turnpoints.pop();
+                inside_turnpoints.pop();
                 let mut prev_optimal = Some(Rc::clone(start_fixes.first().unwrap()));
                 assert_eq!(inside_turnpoints.len(), task.points.windows(3).count());
                 let mut leg_times = task.points.windows(3).zip(inside_turnpoints.iter()).map(|(window, fixes)| {

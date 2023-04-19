@@ -1,7 +1,8 @@
 use std::{error::Error, fs::File, io::Read};
 use std::str::FromStr;
-use igc::{records::{BRecord, CRecordTurnpoint, Record}, util::{Compass, RawPosition, Time}};
-use igc::records::FixValid;
+use igc::{records::{BRecord, CRecordTurnpoint, Record}, records, util::{Compass, RawPosition, Time}};
+use igc::records::{FixValid, HRecord};
+use igc::util::{Date, ParseError};
 use regex::Regex;
 
 #[derive(Clone)]
@@ -178,6 +179,12 @@ pub fn get_turnpoint_descriptions(contents: &str) -> Vec<String> {
             _ => None,
         }).collect::<Vec<String>>();
     map_parsed_contents(contents, f)
+}
+
+pub fn get_date(contents: &str) -> Result<Date, ParseError> {
+    let hfdte_rec = contents.lines().find(|line| line.starts_with("HFDTE")).unwrap_or("HFDTE999999");
+    let date_string = hfdte_rec.replace("HFDTE", "");
+    Ok(Date::parse(&date_string)?)
 }
 
 type Lat = f32;
