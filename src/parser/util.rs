@@ -82,9 +82,12 @@ pub fn get_contents(path: &str) -> Result<String, Box<dyn Error>> {
 fn map_parsed_contents<F,T>(contents: &str, f: F) -> T
     where F: FnOnce(&Vec<Record>) -> T
 {
-    let records: Vec<Record> = contents.lines().filter(|line| !line.is_empty()).map(
+    let records: Vec<Record> = contents.lines().filter(|line| !line.is_empty()).filter_map(
         |line| {
-            Record::parse_line(line).unwrap_or_else(|e| panic!("unable to parse line: {line}, because error: {:?}", e))
+            match Record::parse_line(line) {
+                Ok(rec) => Some(rec),
+                Err(_) => None,
+            }
         }
     ).collect();
     f(&records)
@@ -182,9 +185,10 @@ pub fn get_turnpoint_descriptions(contents: &str) -> Vec<String> {
 }
 
 pub fn get_date(contents: &str) -> Result<Date, ParseError> {
+    //If just people used the correct formatting this would be simple!!!
     let hfdte_rec = contents.lines().find(|line| line.starts_with("HFDTE")).unwrap_or("HFDTE999999");
-    let date_string = hfdte_rec.replace("HFDTE", "");
-    Ok(Date::parse(&date_string)?)
+    let first_number = hfdte_rec.chars().position(|c| c.is_numeric()).unwrap();
+    Ok(Date::parse(&hfdte_rec[first_number..first_number + 6])?)
 }
 
 type Lat = f32;

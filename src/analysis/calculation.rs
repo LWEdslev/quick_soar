@@ -20,6 +20,7 @@ pub struct Calculation {
     pub pilot_info: PilotInfo,
     speed: Option<Kph>,
     distance: Option<FloatMeters>,
+    qfe_alt: i16,
 }
 
 impl Calculation {
@@ -29,10 +30,11 @@ impl Calculation {
         pilot_info: PilotInfo,
         start_time: Option<Seconds>,
         speed: Option<Kph>,
-        distance: Option<FloatMeters>
+        distance: Option<FloatMeters>,
     ) -> Calculation {
-
         let fixes = flight.fixes.iter().map(|f| Rc::clone(&f)).collect::<Vec<Rc<Fix>>>();
+
+        let qfe_alt = fixes[0].alt;
 
         let legs = Calculation::make_legs(&fixes, &task, start_time, &flight);
 
@@ -51,6 +53,7 @@ impl Calculation {
             pilot_info,
             speed,
             distance,
+            qfe_alt
         }
     }
 
@@ -331,7 +334,24 @@ impl Calculation {
 
     // pub fn wind_thermal_gain(&self, task_piece: TaskPiece) -> Option<Percentage> { }
 
-    // pub fn time_below_500m_qfe(&self, task_piece: TaskPiece) -> Option<Percentage> { }
+    pub fn time_below_500m_qfe(&self, task_piece: TaskPiece) -> Option<Percentage> {
+        impl Flight {
+            fn time_below_500(&self, qfe_alt: Meters) -> Option<Percentage> {
+                if self.fixes.is_empty() { return None };
+                let all_fixes = self.fixes.len() as f32;
+                let low_fixes = self.fixes.iter().filter(|fix| fix.alt <= qfe_alt + 500).collect::<Vec<&Rc<Fix>>>().len() as f32;
+                Some((low_fixes * 100.) / all_fixes)
+            }
+        }
+        match task_piece {
+            TaskPiece::EntireTask => {
+                self.total_flight.time_below_500(self.qfe_alt)
+            }
+            TaskPiece::Leg(leg_num) => {
+                self.legs.get(leg_num)?.as_ref()?.time_below_500(self.qfe_alt)
+            }
+        }
+    }
 
     pub fn get_pilot_info(&self) -> &PilotInfo {
         &self.pilot_info

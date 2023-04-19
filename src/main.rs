@@ -11,7 +11,7 @@ async fn main() {
 
     let time = std::time::Instant::now();
     let url = String::from(
-        "https://www.soaringspot.com/en_gb/arnborg-easter-cup-svaeveflyvecenter-arnborg-2023/results/multiclass/task-1-on-2023-04-06/daily"
+        "https://www.soaringspot.com/en_gb/arnborg-easter-cup-svaeveflyvecenter-arnborg-2023/results/multiclass/task-2-on-2023-04-07/daily"
     );
     let spot = soaringspot::SoaringSpot::new(url).await.unwrap();
 

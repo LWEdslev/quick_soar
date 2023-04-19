@@ -142,6 +142,7 @@ enum ColumnHeader {
     Speed,
     TurningPercentage,
     ThermalAltLoss,
+    PercentBelow500,
 }
 
 impl ColumnHeader {
@@ -164,6 +165,7 @@ impl ColumnHeader {
             Speed => "XC Speed",
             TurningPercentage => "Circling percentage",
             ThermalAltLoss => "Thermal altitude loss",
+            PercentBelow500 => "Percentage below 500 QFE",
         }
     }
 
@@ -176,7 +178,7 @@ impl ColumnHeader {
             ClimbRate => Some("[m/s]"),
             CruiseSpeed | Speed | ClimbSpeed => Some("[km/h]"),
             CruiseDistance => Some("[km]"),
-            ExcessDistance | ThermalAltLoss | TurningPercentage => Some("[%]"),
+            ExcessDistance | ThermalAltLoss | TurningPercentage | PercentBelow500 => Some("[%]"),
         }
     }
 
@@ -185,7 +187,7 @@ impl ColumnHeader {
         match self {
             Ranking | Airplane  | Callsign | Distance | StartTime | FinishTime => false,
             StartAlt | ClimbRate | ClimbSpeed | CruiseSpeed | CruiseDistance | GlideRatio
-                | ExcessDistance | Speed | TurningPercentage | ThermalAltLoss => true,
+                | ExcessDistance | Speed | TurningPercentage | ThermalAltLoss | PercentBelow500 => true,
         }
     }
 
@@ -194,7 +196,7 @@ impl ColumnHeader {
         use Extreme::*;
         match self {
             StartAlt | ClimbRate | CruiseSpeed | CruiseDistance | GlideRatio | Speed => Best,
-            ExcessDistance | TurningPercentage | ClimbSpeed | ThermalAltLoss => Worst,
+            ExcessDistance | TurningPercentage | ClimbSpeed | ThermalAltLoss | PercentBelow500 => Worst,
             _ => None,
         }
     }
@@ -350,6 +352,16 @@ impl ColumnHeader {
                 data.iter().map(|d| {
                     let calc = &d;
                     let value = calc.thermal_height_loss(task_piece);
+                    match value {
+                        None => CellValue::None,
+                        Some(value) => CellValue::Float(value)
+                    }
+                }).collect::<Vec<CellValue>>()
+            }
+            PercentBelow500 => {
+                data.iter().map(|d| {
+                    let calc = &d;
+                    let value = calc.time_below_500m_qfe(task_piece);
                     match value {
                         None => CellValue::None,
                         Some(value) => CellValue::Float(value)
