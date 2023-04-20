@@ -332,7 +332,51 @@ impl Calculation {
 
     // pub fn circling_radius(&self, task_piece: TaskPiece) -> Option<FloatMeters> { }
 
-    // pub fn wind_thermal_gain(&self, task_piece: TaskPiece) -> Option<Percentage> { }
+    pub fn wind_thermal_gain(&self, task_piece: TaskPiece) -> Option<Percentage> {
+        fn find_thermal_gain_over_leg(leg: &Flight) -> Option<Percentage> {
+            let last_fix = leg.fixes.last()?.as_ref();
+            let thermals = leg.segments.iter().filter(|seg| match seg {
+                Segment::Thermal(_) => true,
+                _ => false,
+            }).collect::<Vec<&Segment>>();
+            let thermal_gain = thermals.iter().map(move |thermal| {
+                let first_thermal_fix = thermal.inner().first().unwrap();
+                let last_thermal_fix = thermal.inner().last().unwrap();
+                let first_dist = first_thermal_fix.distance_to(last_fix);
+                let last_dist = last_thermal_fix.distance_to(last_fix);
+                first_dist - last_dist
+            }).sum::<FloatMeters>();
+            Some(thermal_gain)
+        }
+
+        fn leg_dist(leg: &Flight) -> Option<FloatMeters> {
+            let first_fix = leg.fixes.first()?.as_ref();
+            let last_fix = leg.fixes.last()?.as_ref();
+            Some(first_fix.distance_to(last_fix))
+        }
+
+        match task_piece {
+            TaskPiece::EntireTask => {
+                let total_thermal_gain = self.legs.iter().filter_map(|leg| match leg {
+                    None => None,
+                    Some(leg) => find_thermal_gain_over_leg(leg),
+                }).sum::<FloatMeters>();
+
+                let total_dist = self.legs.iter().filter_map(|leg| match leg {
+                    None => None,
+                    Some(leg) => leg_dist(leg),
+                }).sum::<FloatMeters>();
+
+                Some((total_thermal_gain * 100.) / total_dist)
+            }
+            TaskPiece::Leg(leg_num) => {
+                let leg = self.legs.get(leg_num)?.as_ref()?;
+                let thermal_gain = find_thermal_gain_over_leg(leg)?;
+                let dist = leg_dist(leg)?;
+                Some((100. * thermal_gain)/dist)
+            }
+        }
+    }
 
     pub fn time_below_500m_qfe(&self, task_piece: TaskPiece) -> Option<Percentage> {
         impl Flight {

@@ -143,6 +143,7 @@ enum ColumnHeader {
     TurningPercentage,
     ThermalAltLoss,
     PercentBelow500,
+    ThermalDrift,
 }
 
 impl ColumnHeader {
@@ -166,6 +167,7 @@ impl ColumnHeader {
             TurningPercentage => "Circling percentage",
             ThermalAltLoss => "Thermal altitude loss",
             PercentBelow500 => "Percentage below 500 QFE",
+            ThermalDrift => "Task flown by thermal drifting"
         }
     }
 
@@ -178,7 +180,7 @@ impl ColumnHeader {
             ClimbRate => Some("[m/s]"),
             CruiseSpeed | Speed | ClimbSpeed => Some("[km/h]"),
             CruiseDistance => Some("[km]"),
-            ExcessDistance | ThermalAltLoss | TurningPercentage | PercentBelow500 => Some("[%]"),
+            ExcessDistance | ThermalAltLoss | TurningPercentage | PercentBelow500 | ThermalDrift => Some("[%]"),
         }
     }
 
@@ -187,7 +189,7 @@ impl ColumnHeader {
         match self {
             Ranking | Airplane  | Callsign | Distance | StartTime | FinishTime => false,
             StartAlt | ClimbRate | ClimbSpeed | CruiseSpeed | CruiseDistance | GlideRatio
-                | ExcessDistance | Speed | TurningPercentage | ThermalAltLoss | PercentBelow500 => true,
+                | ExcessDistance | Speed | TurningPercentage | ThermalAltLoss | PercentBelow500 | ThermalDrift => true,
         }
     }
 
@@ -195,7 +197,7 @@ impl ColumnHeader {
         use ColumnHeader::*;
         use Extreme::*;
         match self {
-            StartAlt | ClimbRate | CruiseSpeed | CruiseDistance | GlideRatio | Speed => Best,
+            StartAlt | ClimbRate | CruiseSpeed | CruiseDistance | GlideRatio | Speed | ThermalDrift => Best,
             ExcessDistance | TurningPercentage | ClimbSpeed | ThermalAltLoss | PercentBelow500 => Worst,
             _ => None,
         }
@@ -362,6 +364,16 @@ impl ColumnHeader {
                 data.iter().map(|d| {
                     let calc = &d;
                     let value = calc.time_below_500m_qfe(task_piece);
+                    match value {
+                        None => CellValue::None,
+                        Some(value) => CellValue::Float(value)
+                    }
+                }).collect::<Vec<CellValue>>()
+            },
+            ThermalDrift => {
+                data.iter().map(|d| {
+                    let calc = &d;
+                    let value = calc.wind_thermal_gain(task_piece);
                     match value {
                         None => CellValue::None,
                         Some(value) => CellValue::Float(value)
