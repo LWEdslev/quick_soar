@@ -367,6 +367,7 @@ impl Segment {
 #[cfg(test)]
 
 mod tests {
+    use crate::parser;
     use super::*;
 
     #[test]
