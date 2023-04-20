@@ -1,7 +1,7 @@
 use std::{error::Error, fs::File, io::Read};
 use std::str::FromStr;
-use igc::{records::{BRecord, CRecordTurnpoint, Record}, records, util::{Compass, RawPosition, Time}};
-use igc::records::{FixValid, HRecord};
+use igc::{records::{BRecord, CRecordTurnpoint, Record}, util::{Compass, RawPosition, Time}};
+use igc::records::{FixValid};
 use igc::util::{Date, ParseError};
 use regex::Regex;
 
@@ -51,10 +51,7 @@ pub struct TurnpointRecord {
 impl TurnpointRecord {
     pub(crate) fn from_c_record_tp(rec: &CRecordTurnpoint) -> Self {
         let (latitude, longitude) = raw_position_to_decimals(&rec.position);
-        let name = match rec.turnpoint_name {
-            Some(s) => Some(s.to_string()),
-            None => None,
-        };
+        let name = rec.turnpoint_name.map(|s| s.to_string());
         Self {
             latitude,
             longitude,
@@ -72,7 +69,7 @@ pub fn get_contents(path: &str) -> Result<String, Box<dyn Error>> {
     let mut file = File::open(path)?;
     let mut buf = vec![];
     file.read_to_end(&mut buf)?;
-    let contents = String::from_utf8_lossy(&*buf).to_string();
+    let contents = String::from_utf8_lossy(&buf).to_string();
     Ok(contents)
 }
 
@@ -96,7 +93,7 @@ fn map_parsed_contents<F,T>(contents: &str, f: F) -> T
 pub fn get_fixes(contents: &str) -> Vec<Fix> {
     let f = |records: &Vec<Record>| records.iter().filter_map( |record|
         match record {
-            Record::B(brecord) => Some(Fix::from(&brecord)),
+            Record::B(brecord) => Some(Fix::from(brecord)),
             _ => None,
         }
     ).collect::<Vec<Fix>>();
@@ -110,7 +107,7 @@ fn get_l_records_strings(contents: String) -> Vec<String> {
             _ => None,
         }
     ).collect::<Vec<String>>();
-    map_parsed_contents(&*contents, f)
+    map_parsed_contents(&contents, f)
 }
 
 pub fn get_turnpoint_locations(contents: &str) -> Vec<TurnpointRecord> {
@@ -125,7 +122,7 @@ pub fn get_turnpoint_locations(contents: &str) -> Vec<TurnpointRecord> {
                 },
                 Err(_) => None,
             })
-            .filter(|tp| !(tp.longitude == 0. && tp.latitude == 0. && tp.name == None)) //removes first and last marker
+            .filter(|tp| !(tp.longitude == 0. && tp.latitude == 0. && tp.name.is_none())) //removes first and last marker
             .collect()
     }
 
@@ -148,7 +145,7 @@ pub fn get_task_time(contents: &str) -> Option<Time> {
                 },
             _ => None,
         }).collect::<Vec<String>>();
-    let task_string = map_parsed_contents(&*contents, f);
+    let task_string = map_parsed_contents(contents, f);
     assert_eq!(task_string.len(), 1);
 
     match task_string.first() {
@@ -161,7 +158,7 @@ pub fn get_task_time(contents: &str) -> Option<Time> {
                 Some(matc) => {
                     let time_string = &s[matc.start()+"TaskTime=".len() .. matc.end()].to_string();
                     Some(
-                        Time::from_str(&*time_string.replacen(":", "", 3)).unwrap()
+                        Time::from_str(&time_string.replacen(':', "", 3)).unwrap()
                     )
                 },
             }
@@ -188,7 +185,7 @@ pub fn get_date(contents: &str) -> Result<Date, ParseError> {
     //If just people used the correct formatting this would be simple!!!
     let hfdte_rec = contents.lines().find(|line| line.starts_with("HFDTE")).unwrap_or("HFDTE999999");
     let first_number = hfdte_rec.chars().position(|c| c.is_numeric()).unwrap();
-    Ok(Date::parse(&hfdte_rec[first_number..first_number + 6])?)
+    Date::parse(&hfdte_rec[first_number..first_number + 6])
 }
 
 type Lat = f32;

@@ -22,7 +22,7 @@ impl Flight {
             }});
         /*let fixes = fixes.into_iter().filter(
         }).collect::<Vec<Fix>>();*/
-        let fixes = fixes.into_iter().map(|f| Rc::new(f)).collect::<Vec<Rc<Fix>>>();
+        let fixes = fixes.into_iter().map(Rc::new).collect::<Vec<Rc<Fix>>>();
 
         const DEGREE_BOUNDARY: f32 = 150.;  //turn this many degrees in
         const TIME_WINDOW: u32 = 15;        //this much time
@@ -53,7 +53,7 @@ impl Flight {
             time_buildup += delta_time;
             short_buildup.push((fix.timestamp, change));
             //if fix.timestamp >= 39497 { println!("") }
-            buildup.push(Rc::clone(&fix));
+            buildup.push(Rc::clone(fix));
             let total_degree_change = short_buildup.iter().map(|b|b.1).sum::<f32>();
             if (total_degree_change / (time_buildup as f32)).abs() >= target {
                 //We are turning!
@@ -123,7 +123,7 @@ impl Flight {
         segments.push(Segment::Glide(buildup));
 
         fn move_fixes_to_right_segments_by(segments: &mut Vec<Segment>, seconds: usize) {
-            let mut segments = segments.into_iter();
+            let mut segments = segments.iter_mut();
             let mut curr_seg = segments.next().unwrap();
             for next_seg in segments {
                 let first_time = curr_seg.mut_inner().first().unwrap().timestamp;
@@ -173,7 +173,7 @@ impl Flight {
             segments,
         };
         flight.combine_segments();
-        let flight = flight;
+        
         flight
     }
 
@@ -243,7 +243,7 @@ impl Flight {
         let fixes = self.fixes
             .iter()
             .filter(|f| (from..to).contains(&f.timestamp))
-            .map(|f| Rc::clone(&f))
+            .map(Rc::clone)
             .collect::<Vec<Rc<Fix>>>();
         let segments = self.segments.iter()
             .filter(|s| s.inner().last().unwrap().timestamp >= from && s.inner().first().unwrap().timestamp < to)
@@ -343,7 +343,7 @@ impl Segment {
             Segment::Thermal(v) => v,
             Segment::Try(v) => v,
         };
-        if inner.len() == 0 { return 0 }
+        if inner.is_empty() { return 0 }
         inner.last().unwrap().timestamp - inner.first().unwrap().timestamp
     }
 

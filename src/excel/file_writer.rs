@@ -204,7 +204,7 @@ impl ColumnHeader {
     }
 
     fn get_data_cells(&self, data: &Vec<Calculation>, task_piece: &TaskPiece) -> Vec<DataCell> {
-        let task_piece = task_piece.clone();
+        let task_piece = *task_piece;
         use ColumnHeader::*;
         let values = match self {
             Ranking => {
@@ -391,8 +391,8 @@ impl ColumnHeader {
             };
 
             let min_max_closure = |x: &&CellValue ,y: &&CellValue| match (x,y) {
-                (CellValue::Float(x_f), CellValue::Float(y_f)) => x_f.total_cmp(&y_f),
-                (CellValue::Int(x_i), CellValue::Int(y_i)) => x_i.cmp(&y_i),
+                (CellValue::Float(x_f), CellValue::Float(y_f)) => x_f.total_cmp(y_f),
+                (CellValue::Int(x_i), CellValue::Int(y_i)) => x_i.cmp(y_i),
                 _ => unreachable!(),
             };
             let max = values.iter()

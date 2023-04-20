@@ -20,7 +20,7 @@ impl SoaringSpot {
             Err(_) => return Err(format!("Unable to access {}", &link)),
         };
 
-        let table = match Table::find_first(&*html) {
+        let table = match Table::find_first(&html) {
             None => return Err(format!("No table found in {}", &link)),
             Some(table) => table,
         };
@@ -36,10 +36,10 @@ impl SoaringSpot {
         self.table.iter().map(|row| {
             row.get("CN").unwrap_or("no CN data").to_string()
         }).map(|s| {
-            let match_found = regex.find(&*s)?;
+            let match_found = regex.find(&s)?;
             let s = match_found.as_str();
             let mut s = s[start.len() .. s.len() - end.len()].to_owned();
-            if s.starts_with("/") { //convert non-archive files to a http format
+            if s.starts_with('/') { //convert non-archive files to a http format
                 s.insert_str(0, "https://www.soaringspot.com")
             }
             Some(s)
@@ -48,7 +48,7 @@ impl SoaringSpot {
 
     pub fn get_start_times(&self) -> Vec<Option<Time>> {
         self.table.iter().map(|row| {
-            let time_string = row.get("Start")?.trim().to_string().split(":").map(|s| s.to_string()).collect::<Vec<String>>();
+            let time_string = row.get("Start")?.trim().to_string().split(':').map(|s| s.to_string()).collect::<Vec<String>>();
             if time_string.len() != 3 { return None }
             let (h, m, s) = (time_string[0].parse().ok()?, time_string[1].parse().ok()?, time_string[2].parse().ok()?);
             Some(Time::from_hms(h, m, s))
@@ -58,14 +58,14 @@ impl SoaringSpot {
     pub fn get_speeds(&self) -> Vec<Option<Kph>> {
         self.table.iter().map(|row| {
             let speed_string = row.get("Speed")?
-                .trim().to_string().split("&").next()?
+                .trim().to_string().split('&').next()?
                 .parse::<f32>().ok()?;
             Some(speed_string)
         }).collect::<Vec<Option<Kph>>>()
     }
     pub fn get_distances(&self) -> Vec<Option<FloatMeters>> {
         self.table.iter().map(|row| {
-            let dist = row.get("Distance")?.trim().to_string().split("&").next()?.parse::<f32>().ok()?;
+            let dist = row.get("Distance")?.trim().to_string().split('&').next()?.parse::<f32>().ok()?;
             Some(dist * 1000.)
         }).collect::<Vec<Option<FloatMeters>>>()
     }

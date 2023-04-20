@@ -21,9 +21,9 @@ impl Fix {
     fn bearing_to(&self, fix: &Fix) -> Degrees {
         let delta_lat = fix.latitude - self.latitude ;
         let delta_lon = fix.longitude - self.longitude;
-        let out = (delta_lat / ( delta_lon * delta_lon + delta_lat * delta_lat).sqrt()).acos().to_degrees()
-                    * delta_lon.signum() + (if delta_lon.is_sign_negative() {360.} else {0.});
-        out
+        
+        (delta_lat / ( delta_lon * delta_lon + delta_lat * delta_lat).sqrt()).acos().to_degrees()
+                    * delta_lon.signum() + (if delta_lon.is_sign_negative() {360.} else {0.})
     }
 }
 
@@ -51,13 +51,13 @@ fn distance_between(from: (Lat, Lon), to: (Lat, Lon)) -> FloatMeters {
     let x = (lon2 - lon1) * ((lat1 + lat2) / 2.).cos();
     let y = lat2 - lat1;
 
-    (y*y + x*x).sqrt() * 6371_000.
+    (y*y + x*x).sqrt() * 6_371_000.
 }
 
 /// Negative is clockwise.
 /// Positive is counter-clockwise.
 pub fn bearing_change(first: &Fix, second: &Fix, last: &Fix) -> Degrees {
-    let bearing1 = first.bearing_to(&second);
+    let bearing1 = first.bearing_to(second);
     quick_bearing_change(bearing1, second, last)
 }
 
@@ -65,7 +65,7 @@ pub fn bearing_change(first: &Fix, second: &Fix, last: &Fix) -> Degrees {
 /// Positive is counter-clockwise.
 pub fn quick_bearing_change(prev_bearing: Degrees, second: &Fix, last: &Fix) -> Degrees {
     let bearing1 = prev_bearing;
-    let bearing2 = second.bearing_to(&last);
+    let bearing2 = second.bearing_to(last);
     let delta =  bearing1 - bearing2;
 
     if delta.is_nan() { return 0.; };

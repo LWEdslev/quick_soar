@@ -41,7 +41,7 @@ impl PilotElem {
         };
 
         let regex = Regex::new(format!("{start}.+").as_str()).unwrap();
-        let m = regex.find(&description.trim()).unwrap();
+        let m = regex.find(description.trim()).unwrap();
 
         (description.trim()[m.start()+start.len() .. m.end()]).to_string()
     }

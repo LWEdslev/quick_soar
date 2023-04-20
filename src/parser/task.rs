@@ -1,4 +1,4 @@
-use igc::util::{Date, Time};
+use igc::util::{Time};
 use regex::Regex;
 use crate::parser::util;
 use crate::parser::util::TurnpointRecord;
@@ -19,11 +19,8 @@ impl DescriptionElem {
         };
 
         let regex = Regex::new(format!("{start}[0-9]+{end}").as_str()).unwrap();
-        let re_match = regex.find(&description);
-        match re_match {
-            None => None,
-            Some(m) => Some(description[m.start()+start.len() .. m.end()-end.len()].parse().unwrap()),
-        }
+        let re_match = regex.find(description);
+        re_match.map(|m| description[m.start()+start.len() .. m.end()-end.len()].parse().unwrap())
     }
 }
 
@@ -123,7 +120,7 @@ impl Task {
         let task_time = util::get_task_time(contents);
         if tps.len() != descriptions.len() { return Err(TaskError::NotSameAmountOfDescriptionsAsTurnpoints) };
         let points = tps.into_iter().zip(descriptions).map(|(tpl, desc)| {
-            TaskComponent::parse(&*desc, tpl)
+            TaskComponent::parse(&desc, tpl)
         }).collect::<Vec<TaskComponent>>();
 
         if points.len() < 3 { return Err(TaskError::NoTurnpoints) };

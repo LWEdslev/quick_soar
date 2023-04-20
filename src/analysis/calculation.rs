@@ -32,7 +32,7 @@ impl Calculation {
         speed: Option<Kph>,
         distance: Option<FloatMeters>,
     ) -> Calculation {
-        let fixes = flight.fixes.iter().map(|f| Rc::clone(&f)).collect::<Vec<Rc<Fix>>>();
+        let fixes = flight.fixes.iter().map(Rc::clone).collect::<Vec<Rc<Fix>>>();
 
         let qfe_alt = fixes[0].alt;
 
@@ -65,7 +65,7 @@ impl Calculation {
             TaskPiece::Leg(leg_number) => {
                 if leg_number >= self.legs.len() {return None}
                 let leg = self.legs[leg_number].as_ref();
-                if leg.is_none() {return None}
+                leg?;
                 let points = &self.task.points;
                 let time = leg.unwrap().total_time();
                 match self.task.task_type {
@@ -91,12 +91,12 @@ impl Calculation {
                 Some(&self.total_flight.segments)
             }
             TaskPiece::Leg(leg_number) => {
-                if (&self).legs.len() <= leg_number || (&self).legs[leg_number].is_none() {return None};
+                if self.legs.len() <= leg_number || self.legs[leg_number].is_none() {return None};
                 Some(&self.legs[leg_number].as_ref().unwrap().segments)
             }
         };
         let segments = segments?;
-        let glides = segments.into_iter().filter(|s| match s {
+        let glides = segments.iter().filter(|s| match s {
             Segment::Thermal(_) => false,
             Segment::Glide(_) => true,
             Segment::Try(_) => true,
@@ -138,7 +138,7 @@ impl Calculation {
         let (flight_part, task_dist) = match task_piece {
             TaskPiece::EntireTask => {
                 let legs = &self.legs;
-                let task_dist = legs.into_iter().map(|leg| {
+                let task_dist = legs.iter().map(|leg| {
                     let leg = leg.as_ref();
                     if leg.is_none() { 0. } else {
                         let leg = leg.unwrap();
@@ -195,8 +195,8 @@ impl Calculation {
                 &self.total_flight
             }
             TaskPiece::Leg(leg_number) => {
-                let leg = self.legs.get(leg_number)?.as_ref()?;
-                leg
+                
+                self.legs.get(leg_number)?.as_ref()?
             }
         };
 
@@ -287,7 +287,7 @@ impl Calculation {
             _ => true,
         }).map(|glide| {
             let inner = glide.inner();
-            if inner.len() < 1 { return 0. }
+            if inner.is_empty() { return 0. }
             let first = inner.first().unwrap();
             let last = inner.last().unwrap();
             first.distance_to(last)
@@ -308,8 +308,8 @@ impl Calculation {
             }
         ).map(|thermal| {
             let inner = thermal.inner();
-            let first = inner.first().unwrap();
-            let last = inner.last().unwrap();
+            let _first = inner.first().unwrap();
+            let _last = inner.last().unwrap();
             let alt_gain = inner.windows(2).map(|w| {
                 let curr = &w[0];
                 let next = &w[1];
@@ -447,7 +447,7 @@ impl Calculation {
             TaskComponent::Start(_) => {panic!("unexpected start token")}
             _ => {
                 fixes_iter.clone().filter(|fix| turnpoint.inner().is_inside(fix))
-                    .map(|f| Rc::clone(f))
+                    .map(Rc::clone)
                     .collect::<Vec<Rc<Fix>>>()
             }
         }).collect::<Vec<Vec<Rc<Fix>>>>();
@@ -456,7 +456,7 @@ impl Calculation {
         let mut curr_time = Some(inside_turnpoints.first().unwrap().first().unwrap().timestamp);
         let start_time = inside_turnpoints.remove(0).first().unwrap().timestamp;
         let mut leg_times = inside_turnpoints.iter().map(|in_tp| {
-            if curr_time.is_none() { return None } //landout previously
+            curr_time?; //landout previously
             let after_prev = in_tp.iter().filter(|fix| fix.timestamp >= curr_time.unwrap()).collect::<Vec<&Rc<Fix>>>();
             if after_prev.is_empty() { //landout
                 None
@@ -478,7 +478,7 @@ impl Calculation {
                             let best_fix = fixes.iter()
                                 .filter(|fix| fix.timestamp >= start)
                                 .map(|fix| (fix, fix.distance_to_tp(task.points[i].inner())))
-                                .max_by(|(x_fix, x_dist),(y_fix, y_dist)| x_dist.total_cmp(&y_dist)).unwrap().0;
+                                .max_by(|(_x_fix, x_dist),(_y_fix, y_dist)| x_dist.total_cmp(y_dist)).unwrap().0;
                             Some(flight.get_subflight(start, best_fix.timestamp))
                         },
                         _ => None,
@@ -496,7 +496,7 @@ impl Calculation {
                     v.iter().filter(move |fix|
                         start_leg.is_some() && start_leg.unwrap() <= fix.timestamp
                     &&  end_leg.is_some() && end_leg.unwrap() > fix.timestamp
-                    ).map(|f| Rc::clone(f)).collect::<Vec<Rc<Fix>>>()
+                    ).map(Rc::clone).collect::<Vec<Rc<Fix>>>()
                 }).collect::<Vec<Vec<Rc<Fix>>>>();
                 let finish_fix = fixes.iter().filter(|fix| match leg_times.last() {
                     Some(Some(time)) => time == &fix.timestamp,
@@ -519,8 +519,8 @@ impl Calculation {
                             let (_, _, next) = (&window[0], &window[1], &window[2]);
                             let best_fix = fixes.iter()
                                 .max_by(|x, y| {
-                                (x.distance_to_tp(next.inner()) + x.distance_to(&prev_optimal_inner))
-                                    .total_cmp(&(y.distance_to_tp(next.inner()) + y.distance_to(&prev_optimal_inner)))
+                                (x.distance_to_tp(next.inner()) + x.distance_to(prev_optimal_inner))
+                                    .total_cmp(&(y.distance_to_tp(next.inner()) + y.distance_to(prev_optimal_inner)))
                             });
 
                             match best_fix {
@@ -539,10 +539,7 @@ impl Calculation {
 
                 }).collect::<Vec<Option<Seconds>>>();
                 leg_times.insert(0, Some(start_time)); //add start
-                leg_times.push(match finish_fix { //push finish
-                    None => None,
-                    Some(fix) => Some(fix.timestamp),
-                });
+                leg_times.push(finish_fix.map(|fix| fix.timestamp));
                 let legs = leg_times.windows(2).map(|window| {
                     match (window[0], window[1]) {
                         (Some(start), Some(end)) => Some(flight.get_subflight(start, end)),
@@ -550,17 +547,17 @@ impl Calculation {
                     }
                 }).collect::<Vec<Option<Flight>>>();
 
-                let legs = legs.into_iter().map(|leg| match leg {
+                
+
+                legs.into_iter().map(|leg| match leg {
                     None => None,
                     Some(leg) => {
-                        match leg.fixes.len() > 0 {
+                        match !leg.fixes.is_empty() {
                             true => Some(leg),
                             false => None,
                         }
                     }
-                }).collect::<Vec<Option<Flight>>>();
-
-                legs
+                }).collect::<Vec<Option<Flight>>>()
             }
         }
     }
