@@ -63,7 +63,7 @@ fn add_non_data_formatting(worksheet: &mut Worksheet, date: &str, task_piece: Ta
     task_piece_cell.set_value_from_string(task_piece_string);
     task_piece_cell.get_style_mut().set_background_color_solid("FF9999FF").get_font_mut().set_name("Times New Roman").set_font_size(FontSize::default().set_val(10.).clone()).set_bold(true);
     task_piece_cell.get_style_mut().get_alignment_mut().set_horizontal(HorizontalAlignmentValues::Center);
-    worksheet.add_merge_cells("B1:P1");
+    worksheet.add_merge_cells("B1:R1");
 }
 
 fn add_column_to_worksheet<T: Into<CellCoordinates>>(worksheet: &mut Worksheet, column: &ColumnHeader, data: &Vec<DataCell>, top_coord: T) {
@@ -141,8 +141,8 @@ enum ColumnHeader {
     Speed,
     TurningPercentage,
     ThermalAltLoss,
-    PercentBelow500,
     ThermalDrift,
+    PercentBelow500,
 }
 
 impl ColumnHeader {
@@ -251,7 +251,7 @@ impl ColumnHeader {
                         None => CellValue::None,
                         Some(mut start_time) => {
                             start_time.offset(utc_offset);
-                            CellValue::String(format!("{}:{}:{}", start_time.hours, start_time.minutes, start_time.seconds))
+                            CellValue::String(format!("{:0>2}:{:0>2}:{:0>2}", start_time.hours, start_time.minutes, start_time.seconds))
                         }
                     }
                 }).collect::<Vec<CellValue>>()
@@ -265,7 +265,7 @@ impl ColumnHeader {
                         None => CellValue::None,
                         Some(mut finish_time) => {
                             finish_time.offset(utc_offset);
-                            CellValue::String(format!("{}:{}:{}", finish_time.hours, finish_time.minutes, finish_time.seconds))
+                            CellValue::String(format!("{:0>2}:{:0>2}:{:0>2}", finish_time.hours, finish_time.minutes, finish_time.seconds))
                         }
                     }
                 }).collect::<Vec<CellValue>>()
