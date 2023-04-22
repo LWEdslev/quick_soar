@@ -21,7 +21,6 @@ pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>, date: D
     task.points.windows(2).enumerate().for_each(|(index, _)| {
         let ws = book.new_sheet("Placeholder").unwrap();
         add_non_data_formatting(ws, "DDMMYY", TaskPiece::Leg(index + 1));
-
     });
 
     let columns = all::<ColumnHeader>().collect::<Vec<ColumnHeader>>();
@@ -171,6 +170,16 @@ impl ColumnHeader {
         }
     }
 
+    fn needs_finish_to_color(&self) -> bool {
+        use ColumnHeader::*;
+        match self {
+            Ranking => false,
+            Airplane | Callsign | Distance | StartTime | FinishTime | StartAlt | ClimbSpeed => false,
+            ClimbRate | CruiseSpeed | GlideRatio | CruiseDistance | ExcessDistance | Speed | TurningPercentage
+            |ThermalAltLoss | PercentBelow500 | ThermalDrift => true,
+        }
+    }
+
     fn unit(&self) -> Option<&str> {
         use ColumnHeader::*;
         match self {
@@ -184,12 +193,13 @@ impl ColumnHeader {
         }
     }
 
-    fn colorizable(&self) -> bool {
+    fn colorizable(&self) -> Colorizable {
         use ColumnHeader::*;
         match self {
-            Ranking | Airplane  | Callsign | Distance | StartTime | FinishTime => false,
-            StartAlt | ClimbRate | ClimbSpeed | CruiseSpeed | CruiseDistance | GlideRatio
-                | ExcessDistance | Speed | TurningPercentage | ThermalAltLoss | PercentBelow500 | ThermalDrift => true,
+            Ranking | Airplane  | Callsign | Distance | StartTime | FinishTime => Colorizable::Never,
+            StartAlt => Colorizable::Always,
+            ClimbRate | ClimbSpeed | CruiseSpeed | CruiseDistance | GlideRatio
+            | ExcessDistance | Speed | TurningPercentage | ThermalAltLoss | PercentBelow500 | ThermalDrift  => Colorizable::OnlyOnFinish
         }
     }
 
@@ -382,52 +392,104 @@ impl ColumnHeader {
             }
         };
 
-        let colors = if self.colorizable() {
-            use Extreme::*;
-            let (high_val, low_val) = match self.is_highest_best_or_worst() {
-                Best => (Best, Worst),
-                Worst => (Worst, Best),
-                None => unreachable!()
-            };
+        let finishes: Vec<bool> = data.iter().map(|calc| {
+            calc.speed(task_piece).is_some()
+        }).collect::<Vec<bool>>();
 
-            let min_max_closure = |x: &&CellValue ,y: &&CellValue| match (x,y) {
-                (CellValue::Float(x_f), CellValue::Float(y_f)) => x_f.total_cmp(y_f),
-                (CellValue::Int(x_i), CellValue::Int(y_i)) => x_i.cmp(y_i),
-                _ => unreachable!(),
-            };
-            let max = values.iter()
-                .filter(|v| match v {
-                    CellValue::Float(_) | CellValue::Int(_) => true,
-                    _ => false,
-                })
-                .max_by(min_max_closure);
+        let colors = match self.colorizable() {
+            Colorizable::Always => {
+                use Extreme::*;
+                let (high_val, low_val) = match self.is_highest_best_or_worst() {
+                    Best => (Best, Worst),
+                    Worst => (Worst, Best),
+                    None => unreachable!()
+                };
 
-            let min = values.iter()
-                .filter(|v| match v {
-                    CellValue::Float(_) | CellValue::Int(_) => true,
-                    _ => false,
-                })
-                .min_by(min_max_closure);
+                let min_max_closure = |x: &&CellValue ,y: &&CellValue| match (x,y) {
+                    (CellValue::Float(x_f), CellValue::Float(y_f)) => x_f.total_cmp(y_f),
+                    (CellValue::Int(x_i), CellValue::Int(y_i)) => x_i.cmp(y_i),
+                    _ => unreachable!(),
+                };
+                let max = values.iter()
+                    .filter(|v| match v {
+                        CellValue::Float(_) | CellValue::Int(_) => true,
+                        _ => false,
+                    })
+                    .max_by(min_max_closure);
 
-            values.iter().map(|v| {
-                let is_max = max.is_some() && v.is_numerically_equal_to(max.unwrap());
-                let is_min = min.is_some() && v.is_numerically_equal_to(min.unwrap());
-                if is_max {
-                    high_val.clone()
-                } else if is_min {
-                    low_val.clone()
-                } else {
-                    None
-                }
-            }).collect::<Vec<Extreme>>()
-        } else {
+                let min = values.iter()
+                    .filter(|v| match v {
+                        CellValue::Float(_) | CellValue::Int(_) => true,
+                        _ => false,
+                    })
+                    .min_by(min_max_closure);
+
+                values.iter().map(|v| {
+                    let is_max = max.is_some() && v.is_numerically_equal_to(max.unwrap());
+                    let is_min = min.is_some() && v.is_numerically_equal_to(min.unwrap());
+                    if is_max {
+                        high_val.clone()
+                    } else if is_min {
+                        low_val.clone()
+                    } else {
+                        None
+                    }
+                }).collect::<Vec<Extreme>>()
+            },
+            Colorizable::Never => {
             values.iter().map(|_| Extreme::None).collect::<Vec<Extreme>>()
+            },
+            Colorizable::OnlyOnFinish => {
+                use Extreme::*;
+                let (high_val, low_val) = match self.is_highest_best_or_worst() {
+                    Best => (Best, Worst),
+                    Worst => (Worst, Best),
+                    None => unreachable!()
+                };
+
+                let min_max_closure = |x: &&CellValue ,y: &&CellValue| match (x,y) {
+                        (CellValue::Float(x_f), CellValue::Float(y_f)) => x_f.total_cmp(y_f),
+                        (CellValue::Int(x_i), CellValue::Int(y_i)) => x_i.cmp(y_i),
+                        _ => unreachable!(),
+                };
+                let max = values.iter().zip(finishes.clone())
+                    .filter(|(v, finished)| match v {
+                    CellValue::Float(_) | CellValue::Int(_) => *finished,
+                    _ => false,
+                }).map(|(v, finished)| v).max_by(min_max_closure);
+
+                let min = values.iter().zip(finishes.clone())
+                .filter(|(v, finished)| match v {
+                    CellValue::Float(_) | CellValue::Int(_) => *finished,
+                    _ => false,
+                }).map(|(v, finished)| v).min_by(min_max_closure);
+
+                values.iter().map(|v| {
+                    let is_max = max.is_some() && v.is_numerically_equal_to(max.unwrap());
+                    let is_min = min.is_some() && v.is_numerically_equal_to(min.unwrap());
+                    if is_max {
+                        high_val.clone()
+                    } else if is_min {
+                        low_val.clone()
+                    } else {
+                        None
+                    }
+                }).collect::<Vec<Extreme>>()
+            }
         };
+
+
 
         values.iter().zip(colors).map(|(v,c)| {
             DataCell::new(c, v.clone())
         }).collect::<Vec<DataCell>>()
     }
+}
+
+enum Colorizable {
+    OnlyOnFinish,
+    Always,
+    Never,
 }
 
 #[derive(Clone)]
