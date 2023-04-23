@@ -52,61 +52,44 @@ impl Flight {
             prev_time = fix.timestamp;
             time_buildup += delta_time;
             short_buildup.push((fix.timestamp, change));
-            //if fix.timestamp >= 39497 { println!("") }
             buildup.push(Rc::clone(fix));
             let total_degree_change = short_buildup.iter().map(|b|b.1).sum::<f32>();
-            if (total_degree_change / (time_buildup as f32)).abs() >= target {
-                //We are turning!
-                match buildup_is_glide {
-                    true => { //We have just started turning!
-                        buildup_is_glide = false;
-                        let time_of_segment = buildup.last().unwrap().timestamp - buildup.first().unwrap().timestamp;
-                        let segment = if time_of_segment <= CONNECT_TIME {
-                            let mut prev_segment = match segments.pop() {
-                                None => vec![],
-                                Some(prev_segment) => prev_segment.inner().to_vec(),
-                            };
-
-                            prev_segment.append(&mut buildup.clone());
-
-                            Segment::Thermal(prev_segment) //We did not stop turning for long enough
-                        } else {
-                            Segment::Glide(buildup.clone())
+            if (total_degree_change / (time_buildup as f32)).abs() >= target { //We are turning!
+                if buildup_is_glide { //We have just started turning!
+                    buildup_is_glide = false;
+                    let time_of_segment = buildup.last().unwrap().timestamp - buildup.first().unwrap().timestamp;
+                    let segment = if time_of_segment <= CONNECT_TIME {
+                        let mut prev_segment = match segments.pop() {
+                            None => vec![],
+                            Some(prev_segment) => prev_segment.inner().to_vec(),
                         };
-                        segments.push(segment);
-                        buildup.clear();
-                    },
-                    false => {}, //We are still turning so wait
+                        prev_segment.append(&mut buildup.clone());
+                        Segment::Thermal(prev_segment) //We did not stop turning for long enough
+                    } else {
+                        Segment::Glide(buildup.clone())
+                    };
+                    segments.push(segment);
+                    buildup.clear();
                 }
             } else {
                 //We are going straight!
-                match buildup_is_glide {
-                    true => {}, //We are still going straight!
-                    false => { //We just stopped turning!
-                        buildup_is_glide = true;
-                        let mut prev_segment = match segments.last() {
-                            None => vec![],
-                            Some(prev_segment) => {
-                                match prev_segment {
-                                    Segment::Thermal(_) => {
-                                        if let Segment::Thermal(v) = segments.pop().unwrap() {
-                                            v
-                                        } else {
-                                            panic!("unreachable")
-                                        }
-                                    },
-                                    _ => vec![],
-                                }
+                if !buildup_is_glide { //We just stopped turning!
+                    buildup_is_glide = true;
+                    let mut prev_segment = match segments.last() {
+                        None => vec![],
+                        Some(Segment::Thermal(_)) => {
+                            if let Segment::Thermal(v) = segments.pop().unwrap() {
+                                v
+                            } else {
+                                panic!("unreachable")
                             }
-                        };
-
-                        prev_segment.append(&mut buildup.clone());
-
-
-                        let segment = Segment::Thermal(prev_segment);
-                        segments.push(segment);
-                        buildup.clear();
-                    },
+                        },
+                        Some(_) => vec![],
+                    };
+                    prev_segment.append(&mut buildup.clone());
+                    let segment = Segment::Thermal(prev_segment);
+                    segments.push(segment);
+                    buildup.clear();
                 }
             }
 
@@ -115,9 +98,6 @@ impl Flight {
                 short_buildup.remove(0);
                 time_buildup = short_buildup.last().unwrap().0 - short_buildup.first().unwrap().0;
             }
-
-
-
         }
 
         segments.push(Segment::Glide(buildup));
