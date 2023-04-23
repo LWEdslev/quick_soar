@@ -93,7 +93,7 @@ impl Offsetable for Time {
 #[cfg(test)]
 
 mod tests {
-    use igc::records::{BRecord, CRecordTurnpoint, Record};
+    use igc::records::{BRecord, CRecordTurnpoint};
     use igc::util::Time;
     use crate::parser;
     use crate::parser::util::TurnpointRecord;
@@ -122,8 +122,8 @@ mod tests {
 
     #[test]
     fn is_inside_turnpoint() {
-        let fix = Fix::from(&BRecord::parse("B1246305439371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
-        let turnpoint = Turnpoint::parse(
+        let _fix = Fix::from(&BRecord::parse("B1246305439371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let _turnpoint = Turnpoint::parse(
             "SEEYOU OZ=2,Style=1,SpeedStyle=1,R1=3000m,A1=180,R2=0m,A2=0,MaxAlt=0.0m,AAT=1",
             TurnpointRecord::from_c_record_tp(
                 &CRecordTurnpoint::parse("C5439183N02403467E220Pociunai").unwrap()
@@ -186,8 +186,8 @@ mod tests {
     #[test]
     fn three_bearing_test_0() {
         let fix1 = Fix::from(&BRecord::parse("B1246305439371N02403583EA00040000830070040000000010335-005002460010000100").unwrap());
-        let fix2 = Fix::from(&BRecord::parse("B1246305439371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
-        let fix3 = Fix::from(&BRecord::parse("B1246305339371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let _fix2 = Fix::from(&BRecord::parse("B1246305439371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
+        let _fix3 = Fix::from(&BRecord::parse("B1246305339371N02303583EA00040000830070040000000010335-005002460010000100").unwrap());
 
         assert_eq!(bearing_change(&fix1, &fix1, &fix1).round(), 0.)
     }

@@ -75,7 +75,7 @@ mod tests {
             LCU::HPELVELEVATION:30
             LCU::HPTZNTIMEZONE:-2";
 
-        let pilot_info = PilotInfo::parse(&contents);
+        let pilot_info = PilotInfo::parse(contents);
         assert_eq!(pilot_info.time_zone, -2);
     }
 }

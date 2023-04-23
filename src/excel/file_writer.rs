@@ -456,13 +456,13 @@ impl ColumnHeader {
                     .filter(|(v, finished)| match v {
                     CellValue::Float(_) | CellValue::Int(_) => *finished,
                     _ => false,
-                }).map(|(v, finished)| v).max_by(min_max_closure);
+                }).map(|(v, _finished)| v).max_by(min_max_closure);
 
-                let min = values.iter().zip(finishes.clone())
+                let min = values.iter().zip(finishes)
                 .filter(|(v, finished)| match v {
                     CellValue::Float(_) | CellValue::Int(_) => *finished,
                     _ => false,
-                }).map(|(v, finished)| v).min_by(min_max_closure);
+                }).map(|(v, _finished)| v).min_by(min_max_closure);
 
                 values.iter().map(|v| {
                     let is_max = max.is_some() && v.is_numerically_equal_to(max.unwrap());

@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn ast_task_type_and_start_is_parsed_correctly() {
         let contents = util::get_contents("examples/ast.igc").unwrap();
-        let task = Task::parse(&*contents).unwrap();
+        let task = Task::parse(&contents).unwrap();
         let tps = task.points;
         match task.task_type {
             TaskType::AST => {},
@@ -241,7 +241,7 @@ mod tests {
     #[test]
     fn aat_task_type_and_start_is_parsed_correctly() {
         let contents = util::get_contents("examples/aat.igc").unwrap();
-        let task = Task::parse(&*contents).unwrap();
+        let task = Task::parse(&contents).unwrap();
         let tps = task.points;
         match task.task_type {
             TaskType::AAT(time) => assert_eq!(time, Time::from_hms(2, 0, 0)),
