@@ -6,6 +6,31 @@ use web_handling::soaringspot;
 use analysis::util::Offsetable;
 use quick_soar::parser::util::get_date;
 
+enum PathStrategy {
+    Linux,
+    Windows,
+    MacOS,
+}
+
+impl PathStrategy {
+    fn get_path(&self) -> String {
+        match self {
+            PathStrategy::Linux => {
+                match home::home_dir() {
+                    Some(path) => path.to_str().unwrap().to_string() + &*"/.quicksoar/",
+                    None => panic!("no home directory found"),
+                }
+            }
+            PathStrategy::Windows => {
+                unimplemented!()
+            }
+            PathStrategy::MacOS => {
+                unimplemented!()
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
 
@@ -15,12 +40,24 @@ async fn main() {
     );
     let spot = soaringspot::SoaringSpot::new(url).await.unwrap();
 
-    let path = "igc_files/";
-    soaringspot::clear(path);
-    fs::create_dir(path).unwrap();
+    let path = if cfg!(target_os = "windows") {
+        PathStrategy::Windows
+    } else if cfg!(target_os = "macos") {
+        PathStrategy::MacOS
+    } else if cfg!(target_os = "linux") {
+        PathStrategy::Linux
+    } else {
+        panic!()
+    }.get_path();
+
+    println!("{}", path);
+
+    fs::create_dir(&path).unwrap_or(());
+    soaringspot::clear(&path);
+    fs::create_dir(&path).unwrap();
     for (index, link) in spot.get_download_links().iter().enumerate() {
         if let Some(link) = link {
-            soaringspot::download(link, path, index).await;
+            soaringspot::download(link, &path, index).await;
             println!("Downloaded file {index}")
         } else {
             println!("No file for {index}")
@@ -29,7 +66,7 @@ async fn main() {
 
     println!("{} ms since start", time.elapsed().as_millis());
 
-    let mut paths: Vec<_> = fs::read_dir("igc_files/").unwrap()
+    let mut paths: Vec<_> = fs::read_dir(&path).unwrap()
         .map(|r| r.unwrap())
         .collect();
     paths.sort_by_key(|dir| dir.path());
@@ -57,7 +94,7 @@ async fn main() {
         let calculation = Calculation::new(task, flight, pilot_info, start_time, speed, dist);
         Some(calculation)
     }).collect::<Vec<Calculation>>();
-    soaringspot::clear(path);
+    soaringspot::clear(&path);
 
     println!("Now writing file");
 

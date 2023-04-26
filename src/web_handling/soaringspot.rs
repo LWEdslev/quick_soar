@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::{fs, io};
+use std::path::Path;
 use igc::util::Time;
 use table_extract::Table;
 
@@ -71,14 +72,14 @@ impl SoaringSpot {
     }
 }
 
-pub fn clear(path: &str) {
+pub fn clear<P: AsRef<Path>>(path: P) {
     fs::remove_dir_all(path).unwrap_or(())
 }
 
-pub async fn download(link: &String, path: &str, index: usize) {
+pub async fn download(link: &String, path: &String, index: usize) {
     let filename = format!("{:0>3}.igc", index + 1);
     let resp = reqwest::get(link).await.unwrap().bytes().await.unwrap();
-    let mut file = File::create(path.to_owned() + &*filename).unwrap();
+    let mut file = File::create(path.to_string() + &*filename).unwrap();
     io::copy(&mut resp.as_ref(), &mut file).expect("failed to copy content");
 }
 
