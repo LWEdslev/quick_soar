@@ -15,12 +15,12 @@ pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>, date: D
     let path = std::path::Path::new(path);
     fs::remove_file(path).unwrap_or(()); //remove if present
     let mut book = new_file();
-
+    let date_string = format!("{}-{}-{}", date.day, date.month, date.year);
     let entire_flight = book.new_sheet("Entire flight").unwrap();
-    add_non_data_formatting(entire_flight, format!("{}-{}-{}", date.day, date.month, date.year).as_str(), TaskPiece::EntireTask);
+    add_non_data_formatting(entire_flight, date_string.as_str(), TaskPiece::EntireTask);
     task.points.windows(2).enumerate().for_each(|(index, _)| {
         let ws = book.new_sheet("Placeholder").unwrap();
-        add_non_data_formatting(ws, "DDMMYY", TaskPiece::Leg(index + 1));
+        add_non_data_formatting(ws, date_string.as_str(), TaskPiece::Leg(index + 1));
     });
 
     let columns = all::<ColumnHeader>().collect::<Vec<ColumnHeader>>();

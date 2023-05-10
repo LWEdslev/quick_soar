@@ -1,4 +1,5 @@
-use std::fs;
+use std::process::Command;
+use std::{fs, io};
 use quick_soar::analysis::calculation::Calculation;
 use quick_soar::excel::file_writer;
 use quick_soar::{analysis, parser, web_handling};
@@ -33,38 +34,47 @@ impl PathStrategy {
 
 #[tokio::main]
 async fn main() {
+    println!("Enter URL:");
+    let mut url = String::new();
 
-    let time = std::time::Instant::now();
-    let url = String::from(
-        "https://www.soaringspot.com/en_gb/danmarksmesterskab-arnborg-2022/results/standard/task-4-on-2022-05-29/daily"
-    );
-    let spot = soaringspot::SoaringSpot::new(url).await.unwrap();
+    io::stdin()
+        .read_line(&mut url)
+        .expect("Failed to read line");
+    let mut spot = soaringspot::SoaringSpot::new(url).await;
 
-    let path = if cfg!(target_os = "windows") {
+    while spot.is_err() {
+        println!("Not valid URL");
+        let mut url = String::new();
+        io::stdin()
+        .read_line(&mut url)
+        .expect("Failed to read line");
+        spot = soaringspot::SoaringSpot::new(url).await;
+    }
+    let spot = spot.unwrap();
+
+    let path_strategy = if cfg!(target_os = "windows") {
         PathStrategy::Windows
     } else if cfg!(target_os = "macos") {
         PathStrategy::MacOS
     } else if cfg!(target_os = "linux") {
         PathStrategy::Linux
     } else {
-        panic!()
-    }.get_path();
-
-    println!("{}", path);
+        panic!("unrecognized OS")
+    };
+    let path = path_strategy.get_path();
 
     fs::create_dir(&path).unwrap_or(());
     soaringspot::clear(&path);
     fs::create_dir(&path).unwrap();
-    for (index, link) in spot.get_download_links().iter().enumerate() {
+    let links = spot.get_download_links();
+    for (index, link) in links.iter().enumerate() {
         if let Some(link) = link {
             soaringspot::download(link, &path, index).await;
-            println!("Downloaded file {index}")
+            println!("Downloaded file {} out of {}", index + 1, links.len())
         } else {
-            println!("No file for {index}")
+            println!("No file for {}", index + 1)
         }
     }
-
-    println!("{} ms since start", time.elapsed().as_millis());
 
     let mut paths: Vec<_> = fs::read_dir(&path).unwrap()
         .map(|r| r.unwrap())
@@ -81,25 +91,23 @@ async fn main() {
     let speeds = spot.get_speeds();
     let distances = spot.get_distances();
 
-    println!("{} ms since start, before calcs", time.elapsed().as_millis());
-
     let calculations = contents.into_iter().zip(start_times).zip(speeds).zip(distances).filter_map(|(((content, start_time), speed), dist)| {
         let task = parser::task::Task::parse(&content).ok()?;
         let fixes = parser::util::get_fixes(&content);
         let flight = analysis::segmenting::Flight::make(fixes);
         let pilot_info = parser::pilot_info::PilotInfo::parse(&content);
-        println!("{}", pilot_info.comp_id);
+        println!("Analyzing: {}", pilot_info.comp_id);
         let time_zone = pilot_info.time_zone;
         let start_time = match start_time { None => None, Some(mut time) => { time.offset(-time_zone); Some(time.seconds_since_midnight()) } };
         let calculation = Calculation::new(task, flight, pilot_info, start_time, speed, dist);
         Some(calculation)
     }).collect::<Vec<Calculation>>();
     soaringspot::clear(&path);
-
-    println!("Now writing file");
-
+    
     let some_calc = calculations.first().unwrap();
-    file_writer::make_excel_file("./analysis.xlsx", some_calc.get_task(), &calculations, date);
-
-    println!("{} ms since start", time.elapsed().as_millis());
+    let analysis_path = format!("{}analysis_{}_{}_{}.xlsx", path_strategy.get_path(), date.day, date.month, date.year);
+    fs::create_dir(&path).unwrap();
+    file_writer::make_excel_file(&analysis_path, some_calc.get_task(), &calculations, date);
+    println!("Finished analysis. Opening file"); 
+    opener::open(&analysis_path).unwrap();
 }

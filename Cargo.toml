@@ -12,3 +12,4 @@ tokio = { version = "1.26.0", features = ["macros", "rt-multi-thread"] }
 umya-spreadsheet = "0.9.1"
 enum-iterator = "1.4.0"
 home = "0.5.5"
+opener = "0.6.1"
