@@ -5,6 +5,7 @@ use quick_soar::{analysis, parser, web_handling};
 use web_handling::soaringspot;
 use analysis::util::Offsetable;
 use quick_soar::parser::util::get_date;
+use colored::Colorize;
 
 #[tokio::main]
 async fn main() {
@@ -45,7 +46,7 @@ async fn main() {
     for (index, link) in links.iter().enumerate() {
         if let Some(link) = link {
             soaringspot::download(link, &path, index).await;
-            println!("Downloaded file {} out of {}", index + 1, links.len())
+            println!("Downloaded file {}/{}", format!("{}", index + 1).blue().bold(), format!("{}", links.len()).blue().bold())
         } else {
             println!("No file for {}", index + 1)
         }
@@ -71,7 +72,7 @@ async fn main() {
         let fixes = parser::util::get_fixes(&content);
         let flight = analysis::segmenting::Flight::make(fixes);
         let pilot_info = parser::pilot_info::PilotInfo::parse(&content);
-        println!("Analyzing: {}", pilot_info.comp_id);
+        println!("Analyzing: {}", pilot_info.comp_id.blue().bold());
         let time_zone = pilot_info.time_zone;
         let start_time = match start_time { None => None, Some(mut time) => { time.offset(-time_zone); Some(time.seconds_since_midnight()) } };
         let calculation = Calculation::new(task, flight, pilot_info, start_time, speed, dist);

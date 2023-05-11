@@ -166,17 +166,7 @@ impl ColumnHeader {
             TurningPercentage => "Circling percentage",
             ThermalAltLoss => "Thermal altitude loss",
             PercentBelow500 => "Percentage below 500 QFE",
-            ThermalDrift => "Task flown by thermal drifting"
-        }
-    }
-
-    fn needs_finish_to_color(&self) -> bool {
-        use ColumnHeader::*;
-        match self {
-            Ranking => false,
-            Airplane | Callsign | Distance | StartTime | FinishTime | StartAlt | ClimbSpeed => false,
-            ClimbRate | CruiseSpeed | GlideRatio | CruiseDistance | ExcessDistance | Speed | TurningPercentage
-            |ThermalAltLoss | PercentBelow500 | ThermalDrift => true,
+            ThermalDrift => "Task flown in thermals"
         }
     }
 

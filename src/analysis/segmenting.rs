@@ -20,8 +20,6 @@ impl Flight {
                 prev_sound_fix = f.clone();
                 true
             }});
-        /*let fixes = fixes.into_iter().filter(
-        }).collect::<Vec<Fix>>();*/
         let fixes = fixes.into_iter().map(Rc::new).collect::<Vec<Rc<Fix>>>();
 
         const DEGREE_BOUNDARY: f32 = 150.;  //turn this many degrees in
