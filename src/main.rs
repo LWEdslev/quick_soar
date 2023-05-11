@@ -1,4 +1,3 @@
-use std::process::Command;
 use std::{fs, io};
 use quick_soar::analysis::calculation::Calculation;
 use quick_soar::excel::file_writer;
@@ -6,31 +5,6 @@ use quick_soar::{analysis, parser, web_handling};
 use web_handling::soaringspot;
 use analysis::util::Offsetable;
 use quick_soar::parser::util::get_date;
-
-enum PathStrategy {
-    Linux,
-    Windows,
-    MacOS,
-}
-
-impl PathStrategy {
-    fn get_path(&self) -> String {
-        match self {
-            PathStrategy::Linux => {
-                match home::home_dir() {
-                    Some(path) => path.to_str().unwrap().to_string() + &*"/.quicksoar/",
-                    None => panic!("no home directory found"),
-                }
-            }
-            PathStrategy::Windows => {
-                unimplemented!()
-            }
-            PathStrategy::MacOS => {
-                unimplemented!()
-            }
-        }
-    }
-}
 
 #[tokio::main]
 async fn main() {
@@ -43,7 +17,7 @@ async fn main() {
     let mut spot = soaringspot::SoaringSpot::new(url).await;
 
     while spot.is_err() {
-        println!("Not valid URL");
+        println!("Invalid URL, enter a new one:");
         let mut url = String::new();
         io::stdin()
         .read_line(&mut url)
@@ -61,6 +35,7 @@ async fn main() {
     } else {
         panic!("unrecognized OS")
     };
+
     let path = path_strategy.get_path();
 
     fs::create_dir(&path).unwrap_or(());
@@ -110,4 +85,36 @@ async fn main() {
     file_writer::make_excel_file(&analysis_path, some_calc.get_task(), &calculations, date);
     println!("Finished analysis. Opening file"); 
     opener::open(&analysis_path).unwrap();
+}
+
+
+enum PathStrategy {
+    Linux,
+    Windows,
+    MacOS,
+}
+
+impl PathStrategy {
+    fn get_path(&self) -> String {
+        match self {
+            PathStrategy::Linux => {
+                match home::home_dir() {
+                    Some(path) => path.to_str().unwrap().to_string() + &*"/.quicksoar/",
+                    None => panic!("no home directory found"),
+                }
+            }
+            PathStrategy::Windows => {
+                match home::home_dir() {
+                    Some(path) => path.to_str().unwrap().to_string() + &*"/.quicksoar/",
+                    None => panic!("no home directory found"),
+                }
+            }
+            PathStrategy::MacOS => {
+                match home::home_dir() {
+                    Some(path) => path.to_str().unwrap().to_string() + &*"/.quicksoar/",
+                    None => panic!("no home directory found"),
+                }
+            }
+        }
+    }
 }
