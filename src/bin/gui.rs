@@ -6,7 +6,7 @@ use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{button, column, container, row, text, text_input};
 use iced::widget::progress_bar;
 use iced::Settings;
-use iced::window::icon;
+use iced::window::{icon, Position};
 use igc::util::{Date, Time};
 use image::ImageFormat;
 use quick_soar::{analysis, parser, PathStrategy};
@@ -23,13 +23,13 @@ type FloatMeters = f32;
 
 pub fn main() -> iced::Result {
     let bytes = include_bytes!("qsicon.png");
-    let icon = icon::from_file_data(bytes, Some(ImageFormat::Png)).unwrap();
+    let icon = icon::from_file_data(bytes, Some(ImageFormat::Png)).expect("unable to make icon");
 
     AppState::run(Settings {
         id: None,
         window: window::Settings {
             size: (400, 180),
-            position: Default::default(),
+            position: Position::Centered,
             min_size: None,
             max_size: None,
             visible: true,
@@ -152,6 +152,9 @@ impl Application for AppState {
                 Command::none()
             }
             Message::GotSoaringspot(Ok(spot)) => {
+                fs::create_dir(&self.path).unwrap_or(());
+                soaringspot::clear(&self.path);
+                fs::create_dir(&self.path).unwrap();
                 let links = spot.get_download_links();
                 self.soaringspot = Some(spot);
                 self.links = links;
@@ -193,7 +196,6 @@ impl Application for AppState {
                 }
 
                 let spot = self.soaringspot.as_ref().unwrap();
-                assert!(!contents.is_empty());
                 let date = get_date(contents[0].as_str()).unwrap();
                 let start_times = spot.get_start_times();
                 let speeds = spot.get_speeds();
