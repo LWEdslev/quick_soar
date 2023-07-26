@@ -7,6 +7,7 @@ use table_extract::Table;
 type Kph = f32;
 type FloatMeters = f32;
 
+#[derive(Clone, Debug)]
 pub struct SoaringSpot {
     table: Table
 }

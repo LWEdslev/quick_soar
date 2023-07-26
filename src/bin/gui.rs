@@ -1,30 +1,29 @@
 use std::hash::Hash;
-use std::sync::{Arc, Mutex, MutexGuard};
 use std::{fs, thread};
-use std::time::Duration;
-use iced::{Alignment, Application, Command, Element, executor, futures, Renderer, Subscription, subscription, Theme, window};
+use std::path::Path;
+use iced::{Alignment, Application, Command, Element, executor, Theme, window};
 use iced::alignment::{Horizontal, Vertical};
-use iced::futures::future::BoxFuture;
 use iced::widget::{button, column, container, row, text, text_input};
 use iced::widget::progress_bar;
 use iced::Settings;
-use iced_native::command::Action;
+use iced::window::icon;
 use igc::util::{Date, Time};
+use image::ImageFormat;
 use quick_soar::{analysis, parser, PathStrategy};
 use quick_soar::analysis::calculation::Calculation;
 use quick_soar::web_handling::soaringspot;
 use quick_soar::web_handling::soaringspot::SoaringSpot;
 use quick_soar::analysis::util::Offsetable;
+use quick_soar::excel::file_writer;
 use quick_soar::parser::task::Task;
 use quick_soar::parser::util::get_date;
 
 type Kph = f32;
 type FloatMeters = f32;
 
-
-
 pub fn main() -> iced::Result {
-    let icon = None;
+    let bytes = include_bytes!("qsicon.png");
+    let icon = icon::from_file_data(bytes, Some(ImageFormat::Png)).unwrap();
 
     AppState::run(Settings {
         id: None,
@@ -38,7 +37,7 @@ pub fn main() -> iced::Result {
             decorations: true,
             transparent: false,
             always_on_top: false,
-            icon,
+            icon: Some(icon),
             platform_specific: Default::default(),
         },
         flags: (),
@@ -54,21 +53,22 @@ pub fn main() -> iced::Result {
 #[derive(PartialEq, Clone, Debug)]
 enum ProgressState {
     NotStarted,
-    GetSoaringspot,
     Downloading(Frac),
     Analyzing(Frac),
     Finished,
+    IncorrectURL,
 }
 
 #[derive(Clone, Debug)]
 enum Message {
     UrlChanged(String),
+    StartAnalysis, // Button
     GotSoaringspot(Result<SoaringSpot, String>),
-    Downloaded(Frac),
-    PreAnalysis,
+    Downloading(Frac),
+    PreAnalysis(Result<(), GUIError>),
     Analyzed(Frac),
-    PostAnalysis,
-    OpenFile,
+    PostAnalysis(Result<(), GUIError>),
+    OpenFile, // Button
 }
 
 struct AppState {
@@ -76,13 +76,15 @@ struct AppState {
     progress: ProgressState,
     error_state: ErrorState,
     soaringspot: Option<SoaringSpot>,
-    links: Option<Vec<Option<String>>>,
+    links: Vec<Option<String>>,
     contents: Vec<String>,
     date: Option<Date>,
     start_times: Vec<Option<Time>>,
     speeds: Vec<Option<Kph>>,
     distances: Vec<Option<FloatMeters>>,
     calculations: Vec<Calculation>,
+    path: String,
+    analysis_path: Option<String>,
 }
 
 
@@ -112,13 +114,15 @@ impl Application for AppState {
                 progress: ProgressState::NotStarted,
                 error_state: ErrorState::None,
                 soaringspot: None,
-                links: None,
+                links: vec![],
                 contents: vec![],
                 date: None,
                 start_times: vec![],
                 speeds: vec![],
                 distances: vec![],
                 calculations: vec![],
+                path: PathStrategy::new().get_path(),
+                analysis_path: None,
             },
             Command::none()
         )
@@ -128,96 +132,88 @@ impl Application for AppState {
         "QuickSoar - Gliding Analysis Tool".to_string()
     }
 
-    fn subscription(&self) -> Subscription<Self::Message> {
-        match self.progress {
-            ProgressState::NotStarted | ProgressState::Finished => Subscription::none(),
-            ProgressState::GetSoaringspot => {
-                let path = PathStrategy::new().get_path();
-                fs::create_dir(&path).unwrap_or(());
-                soaringspot::clear(&path);
-                fs::create_dir(&path).unwrap();
-                let url = self.input.clone();
-                let closure = move |_unit: ()| {
-                    let url = url.clone();
-                    async move {
-                        let spot = SoaringSpot::new(url.clone()).await.unwrap();
-                        let links = spot.get_download_links();
-                        println!("{:?}", links);
-                        (Message::GotSoaringspot(spot, links), ())
-                    }
-                };
-                return subscription::unfold(0, (), closure)
-            }
-            ProgressState::Downloading(Frac(downloaded, total)) => {
-                let links = self.links.as_ref().unwrap();
-                let curr_file = links[downloaded].clone();
-                let path = PathStrategy::new().get_path();
-                let closure = move |_| {
-                    let path = path.clone();
-                    let curr_file = curr_file.clone();
-                    async move {
-                        if downloaded == total - 1 {
-                            thread::sleep(Duration::from_millis(1000));
-                            return (Message::PreAnalysis, ())
-                        }
-                        match curr_file {
-                            None => {
-                                (Message::Downloaded(Frac(downloaded + 1, total)), ())
-                            }
-                            Some(link) => {
-                                soaringspot::download(&link, &path, downloaded).await;
-                                (Message::Downloaded(Frac(downloaded + 1, total)), ())
-                            }
-                        }
-                    }
-                };
-
-                subscription::unfold(downloaded, (), closure)
-            }
-            ProgressState::Analyzing(Frac(analyzed, total)) => {
-                println!("now analyzing");
-                if analyzed == total {
-                    let finish_analysis_closure = move |_| {
-                        async move {
-                            (Message::PostAnalysis, ())
-                        }
-                    };
-                    return subscription::unfold(analyzed, (), finish_analysis_closure)
-                }
-
-                let inc_closure = move |_| {
-                    async move {
-                        (Message::Analyzed(Frac(analyzed + 1, total)), ())
-                    }
-                };
-
-                subscription::unfold(analyzed + total, (), inc_closure)
-            }
-        }
-    }
-
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
 
         println!("{:?}", message);
         match message {
             Message::UrlChanged(new_url) => {
                 self.input = new_url;
+                Command::none()
             }
             Message::StartAnalysis => {
-                self.progress = ProgressState::GetSoaringspot;
+                async fn contact_soaringspot(url: String) -> Result<SoaringSpot, String> {
+                    let spot = SoaringSpot::new(url).await;
+                    spot
+                }
+                Command::perform(contact_soaringspot(self.input.clone()), Message::GotSoaringspot)
             }
-            Message::PostAnalysis => {
-                self.progress = ProgressState::Finished;
+            Message::GotSoaringspot(Err(_)) => {
+                self.progress = ProgressState::IncorrectURL;
+                Command::none()
             }
-            Message::OpenFile => {
-                println!("Open file");
+            Message::GotSoaringspot(Ok(spot)) => {
+                let links = spot.get_download_links();
+                self.soaringspot = Some(spot);
+                self.links = links;
+
+                async fn start_download(length: usize) -> Frac {
+                    Frac(0, length)
+                }
+
+                Command::perform(start_download(self.links.len()), Message::Downloading)
             }
-            Message::Downloaded(frac) => {
+
+            Message::Downloading(frac) if frac.is_max() => {
                 self.progress = ProgressState::Downloading(frac);
-                println!("self.progress = {:?}", self.progress);
+                Command::perform(async {Ok(())}, Message::PreAnalysis)
             }
+
+            Message::Downloading(frac) => {
+                let link = self.links[frac.0].clone();
+                let path = self.path.clone();
+                self.progress = ProgressState::Downloading(frac.clone());
+                async fn download(link: Option<String>, path: String, frac: Frac) -> Frac {
+                    if let Some(link) = link { soaringspot::download(&link, &path, frac.0).await; }
+                    frac.increment()
+                }
+                Command::perform(download(link, path, frac.clone()), Message::Downloading)
+            }
+
+            Message::PreAnalysis(_) => {
+                let mut paths: Vec<_> = fs::read_dir(&PathStrategy::new().get_path()).unwrap()
+                    .map(|r| r.unwrap())
+                    .collect();
+                paths.sort_by_key(|dir| dir.path());
+                let contents = paths.into_iter().map(|path| {
+                    parser::util::get_contents(path.path().display().to_string().as_str()).unwrap()
+                }).collect::<Vec<String>>();
+
+                async fn pre_analysis(length: usize) -> Frac {
+                    Frac(0, length)
+                }
+
+                let spot = self.soaringspot.as_ref().unwrap();
+                assert!(!contents.is_empty());
+                let date = get_date(contents[0].as_str()).unwrap();
+                let start_times = spot.get_start_times();
+                let speeds = spot.get_speeds();
+                let distances = spot.get_distances();
+                self.date = Some(date);
+                self.start_times = start_times;
+                self.speeds = speeds;
+                self.distances = distances;
+                self.contents = contents;
+                self.progress = ProgressState::Analyzing(Frac(0, self.contents.len()));
+                println!("length of contents is {}", self.contents.len());
+                Command::perform(pre_analysis(self.contents.len()), Message::Analyzed)
+            }
+
+            Message::Analyzed(frac) if frac.is_max() => {
+                self.progress = ProgressState::Analyzing(frac);
+                Command::perform(async {Ok(())}, Message::PostAnalysis)
+            }
+
             Message::Analyzed(Frac(analyzed, total)) => {
-                println!("{}", self.contents.len());
                 let content = self.contents.get(analyzed).unwrap().clone();
                 let speed = self.speeds.get(analyzed).unwrap().clone();
                 let dist = self.distances.get(analyzed).unwrap().clone();
@@ -244,38 +240,29 @@ impl Application for AppState {
                 };
                 if let Some(calc) = calc {self.calculations.push(calc)}
                 self.progress = ProgressState::Analyzing(Frac(analyzed, total));
+                Command::perform(async move { Frac(analyzed + 1, total) }, Message::Analyzed)
             }
-            Message::GotSoaringspot(spot, links) => {
-                self.soaringspot = Some(spot);
-                self.progress = ProgressState::Downloading(Frac(0, links.len()));
-                self.links = Some(links);
-            }
-            Message::PreAnalysis => {
 
-                let mut paths: Vec<_> = fs::read_dir(&PathStrategy::new().get_path()).unwrap()
-                    .map(|r| r.unwrap())
-                    .collect();
-                paths.sort_by_key(|dir| dir.path());
-                let contents = paths.into_iter().map(|path| {
-                    parser::util::get_contents(path.path().display().to_string().as_str()).unwrap()
-                }
-                ).collect::<Vec<String>>();
-                let spot = self.soaringspot.as_ref().unwrap();
-                assert!(!contents.is_empty());
-                let date = get_date(contents[0].as_str()).unwrap();
-                let start_times = spot.get_start_times();
-                let speeds = spot.get_speeds();
-                let distances = spot.get_distances();
-                self.date = Some(date);
-                self.start_times = start_times;
-                self.speeds = speeds;
-                self.distances = distances;
-                self.contents = contents;
-                self.progress = ProgressState::Analyzing(Frac(0, self.contents.len()));
-                println!("contents are now {}", self.contents.len());
+            Message::PostAnalysis(_) => {
+                self.progress = ProgressState::Finished;
+                let some_calc = self.calculations.first().unwrap();
+                let date = match self.date {
+                    None => Date::from_dmy(0,0,0),
+                    Some(Date { day, month, year }) => Date::from_dmy(day, month, year),
+                };
+                let analysis_path = format!("{}analysis-{}-{}-{}.xlsx", &self.path, date.day, date.month, date.year);
+                soaringspot::clear(&self.path);
+                fs::create_dir(&self.path).unwrap();
+                file_writer::make_excel_file(&analysis_path, some_calc.get_task(), &self.calculations, date);
+                self.analysis_path = Some(analysis_path);
+                Command::none()
+            }
+            Message::OpenFile => {
+                println!("Open file");
+                opener::open(self.analysis_path.as_ref().unwrap()).unwrap();
+                Command::none()
             }
         }
-        Command::none()
     }
 
     fn view(&self) -> Element<Self::Message> {
@@ -286,10 +273,10 @@ impl Application for AppState {
             ProgressState::Downloading(frac) => (frac.to_percentage(), format!("Downloading: {}/{}", frac.0, frac.1)),
             ProgressState::Analyzing(frac) => (frac.to_percentage(), format!("Analyzing: {}/{}", frac.0, frac.1)),
             ProgressState::Finished => (100., "Now you can open the analysis".to_string()),
-            ProgressState::GetSoaringspot => (0., "Contacting soaringspot".to_string()),
+            ProgressState::IncorrectURL => (0., "URL must be from a SoaringSpot competition day".to_string()),
         };
 
-        let mut input_field = text_input::TextInput::new("", input).size(16).on_input(|s| Message::UrlChanged(s));
+        let input_field = text_input::TextInput::new("", input).size(16).on_input(|s| Message::UrlChanged(s));
 
         let txt = text::Text::new("Enter URL: ").size(20).vertical_alignment(Vertical::Center);
         let url_row = row![
@@ -358,16 +345,7 @@ enum FileProgress {
     NotStarted, Started, Finished, Errored
 }
 
-
-
-#[derive(Debug)]
-enum DownloadState {
-    NotStarted,
-    Started,
-    Finished,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum GUIError {
     FailedDownloading,
     FailedWriting,

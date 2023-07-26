@@ -7,10 +7,14 @@ edition = "2021"
 igc = "0.2.2"
 regex = "1.7.1"
 table-extract = "0.2.2"
-reqwest = "0.11.14"
-tokio = { version = "1.26.0", features = ["macros", "rt-multi-thread"] }
+reqwest = "0.11.16"
+tokio = { version = "1.28.0", features = ["macros", "rt-multi-thread"] }
 umya-spreadsheet = "0.9.1"
 enum-iterator = "1.4.0"
 home = "0.5.5"
 opener = "0.6.1"
 colored = "2.0.0"
+iced = { version = "0.9.0", features = ["tokio", "image"] }
+iced_native = "0.10.3"
+image = "0.24.6"
+

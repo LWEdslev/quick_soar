@@ -34,7 +34,7 @@ impl Calculation {
     ) -> Calculation {
         let fixes = flight.fixes.iter().map(Rc::clone).collect::<Vec<Rc<Fix>>>();
 
-        let qfe_alt = fixes[0].alt;
+        let qfe_alt = fixes[0].alt_igc;
 
         let legs = Calculation::make_legs(&fixes, &task, start_time, &flight);
 
@@ -246,11 +246,11 @@ impl Calculation {
         match task_piece {
             TaskPiece::EntireTask => {
                 let fix = self.total_flight.fixes.first()?;
-                Some(fix.alt)
+                Some(fix.alt_igc)
             }
             TaskPiece::Leg(leg_number) => {
                 let leg = (self.legs.get(leg_number))?.as_ref()?;
-                Some(leg.fixes.first()?.alt)
+                Some(leg.fixes.first()?.alt_igc)
             }
         }
     }
@@ -383,7 +383,7 @@ impl Calculation {
             fn time_below_500(&self, qfe_alt: Meters) -> Option<Percentage> {
                 if self.fixes.is_empty() { return None };
                 let all_fixes = self.fixes.len() as f32;
-                let low_fixes = self.fixes.iter().filter(|fix| fix.alt <= qfe_alt + 500).collect::<Vec<&Rc<Fix>>>().len() as f32;
+                let low_fixes = self.fixes.iter().filter(|fix| fix.alt_igc <= qfe_alt + 500).count() as f32;
                 Some((low_fixes * 100.) / all_fixes)
             }
         }
@@ -507,8 +507,8 @@ impl Calculation {
                     Some(fix) => vec![Rc::clone(fix)],
                 });
                 //at this point |inside_turnpoints| == |task.points|
-
                 let start_fixes = inside_turnpoints.remove(0);
+                if start_fixes.len() == 0 { return inside_turnpoints.iter().map(|i| None).collect::<Vec<Option<Flight>>>() }
                 inside_turnpoints.pop();
                 let mut prev_optimal = Some(Rc::clone(start_fixes.first().unwrap()));
                 assert_eq!(inside_turnpoints.len(), task.points.windows(3).count());

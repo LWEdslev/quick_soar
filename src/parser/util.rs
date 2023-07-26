@@ -11,6 +11,7 @@ pub struct Fix {
     pub latitude: f32, //positive is north
     pub longitude: f32, //positive is east
     pub alt: i16,
+    pub alt_igc: i16,
     valid: bool,
 }
 
@@ -24,6 +25,7 @@ impl Fix {
             latitude: lat,
             longitude: lon,
             alt: rec.gps_alt,
+            alt_igc: rec.pressure_alt,
             valid: rec.fix_valid == FixValid::Valid
         }
     }
@@ -146,7 +148,6 @@ pub fn get_task_time(contents: &str) -> Option<Time> {
             _ => None,
         }).collect::<Vec<String>>();
     let task_string = map_parsed_contents(contents, f);
-    assert_eq!(task_string.len(), 1);
 
     match task_string.first() {
         Some(s) => {
