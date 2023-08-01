@@ -73,10 +73,6 @@ impl SoaringSpot {
     }
 }
 
-pub fn clear<P: AsRef<Path>>(path: P) {
-    fs::remove_dir_all(path).unwrap_or(())
-}
-
 pub async fn download(link: &String, path: &String, index: usize) {
     let filename = format!("{:0>3}.igc", index + 1);
     let resp = reqwest::get(link).await.unwrap().bytes().await.unwrap();
@@ -84,3 +80,25 @@ pub async fn download(link: &String, path: &String, index: usize) {
     io::copy(&mut resp.as_ref(), &mut file).expect("failed to copy content");
 }
 
+/// Delete all files in a directory (not recursively) but keep the directory and subdirectories
+pub fn delete_files_in_dir(dir: &str) {
+    fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.is_file())
+        .for_each(|file| fs::remove_file(file).unwrap());
+}
+
+/// Make a file name unique by adding a number to the end of the file name if the file already exists
+pub fn make_file_name_unique(path: &str) -> String {
+    let mut file_name = path.clone().to_string();
+    let mut i = 1;
+    while fs::metadata(&file_name).is_ok() {
+        let s = path.split(".").collect::<Vec<&str>>();
+        let ext = s[s.len() - 1];
+        let s = s[0..s.len() - 1].join(".");
+        file_name = format!("{} ({}).{}", s, i, ext);
+        i += 1;
+    }
+    file_name
+}

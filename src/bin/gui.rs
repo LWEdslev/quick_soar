@@ -141,6 +141,14 @@ impl Application for AppState {
                 Command::none()
             }
             Message::StartAnalysis => {
+                self.contents.clear();
+                self.soaringspot = None;
+                self.date = None;
+                self.calculations.clear();
+                self.distances.clear();
+                self.speeds.clear();
+                self.start_times.clear();
+                self.links.clear();
                 async fn contact_soaringspot(url: String) -> Result<SoaringSpot, String> {
                     let spot = SoaringSpot::new(url).await;
                     spot
@@ -153,8 +161,7 @@ impl Application for AppState {
             }
             Message::GotSoaringspot(Ok(spot)) => {
                 fs::create_dir(&self.path).unwrap_or(());
-                soaringspot::clear(&self.path);
-                fs::create_dir(&self.path).unwrap();
+                soaringspot::delete_files_in_dir(&self.path);
                 let links = spot.get_download_links();
                 self.soaringspot = Some(spot);
                 self.links = links;
@@ -185,6 +192,7 @@ impl Application for AppState {
             Message::PreAnalysis(_) => {
                 let mut paths: Vec<_> = fs::read_dir(&PathStrategy::new().get_path()).unwrap()
                     .map(|r| r.unwrap())
+                    .filter(|dir| dir.path().is_file())
                     .collect();
                 paths.sort_by_key(|dir| dir.path());
                 let contents = paths.into_iter().map(|path| {
@@ -252,9 +260,24 @@ impl Application for AppState {
                     None => Date::from_dmy(0,0,0),
                     Some(Date { day, month, year }) => Date::from_dmy(day, month, year),
                 };
-                let analysis_path = format!("{}analysis-{}-{}-{}.xlsx", &self.path, date.day, date.month, date.year);
-                soaringspot::clear(&self.path);
-                fs::create_dir(&self.path).unwrap();
+                let class: Option<String> = {
+                    let url = self.input.clone();
+                    let mut parts = url.split("/").collect::<Vec<&str>>();
+                    println!("partslen is {}", parts.len());
+                    match parts.iter().position(|p| p.starts_with("results")) {
+                        None => None,
+                        Some(index) => {
+                            let class = parts.get(index + 1).unwrap();
+                            Some(class.to_string())
+                        },
+                    }
+                };
+                let analysis_path = format!("{}analysis/QS-{}-{}-{}-{}.xlsx", &self.path, class.unwrap_or("".to_string()), date.day, date.month, date.year);
+                println!("analysis path is {}", analysis_path);
+                let analysis_path = soaringspot::make_file_name_unique(analysis_path.as_str());
+                println!("analysis path is {}", analysis_path);
+                soaringspot::delete_files_in_dir(&self.path);
+                fs::create_dir(format!("{}/analysis", &self.path)).unwrap_or(());
                 file_writer::make_excel_file(&analysis_path, some_calc.get_task(), &self.calculations, date);
                 self.analysis_path = Some(analysis_path);
                 Command::none()
