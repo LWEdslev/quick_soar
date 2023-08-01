@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 use std::hash::Hash;
 use std::{fs, thread};
 use std::path::Path;
