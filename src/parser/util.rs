@@ -151,7 +151,7 @@ pub fn get_task_time(contents: &str) -> Option<Time> {
 
     match task_string.first() {
         Some(s) => {
-            let regex = Regex::new("TaskTime=[0-9][0-9]:[0-9][0-9]:[0-9][0-9]").unwrap();
+            let regex = Regex::new("TaskTime=[0-9][0-9]:[0-9][0-9]:[0-9][0-9]").ok()?;
             let matc = regex.find(s);
 
             match matc {
@@ -159,7 +159,7 @@ pub fn get_task_time(contents: &str) -> Option<Time> {
                 Some(matc) => {
                     let time_string = &s[matc.start()+"TaskTime=".len() .. matc.end()].to_string();
                     Some(
-                        Time::from_str(&time_string.replacen(':', "", 3)).unwrap()
+                        Time::from_str(&time_string.replacen(':', "", 3)).ok()?
                     )
                 },
             }
@@ -185,7 +185,10 @@ pub fn get_turnpoint_descriptions(contents: &str) -> Vec<String> {
 pub fn get_date(contents: &str) -> Result<Date, ParseError> {
     //If just people used the correct formatting this would be simple!!!
     let hfdte_rec = contents.lines().find(|line| line.starts_with("HFDTE")).unwrap_or("HFDTE999999");
-    let first_number = hfdte_rec.chars().position(|c| c.is_numeric()).unwrap();
+    let first_number = match hfdte_rec.chars().position(|c| c.is_numeric()) {
+        Some(i) => i,
+        None => return Err(ParseError::SyntaxError),
+    };
     Date::parse(&hfdte_rec[first_number..first_number + 6])
 }
 
@@ -238,7 +241,7 @@ mod tests {
     #[test]
     fn no_time_from_ast() {
         assert_eq!(
-            get_task_time(get_contents("examples/ast.igc").unwrap().as_str()),
+            get_task_time(get_contents("examples/ast.igc").expect("file is moved or changed").as_str()),
             None
         )
     }

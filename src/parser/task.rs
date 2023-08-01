@@ -18,9 +18,9 @@ impl DescriptionElem {
             DescriptionElem::AAT => ("AAT=", ""),
         };
 
-        let regex = Regex::new(format!("{start}[0-9]+{end}").as_str()).unwrap();
+        let regex = Regex::new(format!("{start}[0-9]+{end}").as_str()).expect("regex failed to compile");
         let re_match = regex.find(description);
-        re_match.map(|m| description[m.start()+start.len() .. m.end()-end.len()].parse().unwrap())
+        re_match.map(|m| description[m.start()+start.len() .. m.end()-end.len()].parse().ok()?)
     }
 }
 
@@ -148,7 +148,7 @@ impl Task {
             }
         }
 
-        let task_type = match points.get(1).unwrap().is_aat() {
+        let task_type = match points[1].is_aat() {
             true => {
                 match task_time {
                     None => TaskType::AST,
@@ -222,8 +222,8 @@ mod tests {
 
     #[test]
     fn ast_task_type_and_start_is_parsed_correctly() {
-        let contents = util::get_contents("examples/ast.igc").unwrap();
-        let task = Task::parse(&contents).unwrap();
+        let contents = util::get_contents("examples/ast.igc").expect("Failed to get contents");
+        let task = Task::parse(&contents).expect("Failed to parse task");
         let tps = task.points;
         match task.task_type {
             TaskType::AST => {},
@@ -240,8 +240,8 @@ mod tests {
 
     #[test]
     fn aat_task_type_and_start_is_parsed_correctly() {
-        let contents = util::get_contents("examples/aat.igc").unwrap();
-        let task = Task::parse(&contents).unwrap();
+        let contents = util::get_contents("examples/aat.igc").expect("Failed to get contents");
+        let task = Task::parse(&contents).expect("Failed to parse task");
         let tps = task.points;
         match task.task_type {
             TaskType::AAT(time) => assert_eq!(time, Time::from_hms(2, 0, 0)),

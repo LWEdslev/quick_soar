@@ -1,11 +1,11 @@
 ## Priority list
-- [ ] Remove many unwraps (unwrap counter = 177).
+- [ ] Remove many unwraps (unwrap counter = 159).
 - [ ] Filter obscure logs with incorrect lat/lon.
 - [ ] Add algorithm for better landout detection.
 - [ ] Documentation.
 - [ ] Add support for other turnpoint types than simple beer can.
 
-#### Remove many unwraps (unwrap counter = 177). 
+#### Remove many unwraps (unwrap counter = 159). 
   - Urgency: medium
   - Difficulty: medium
   - Time: high

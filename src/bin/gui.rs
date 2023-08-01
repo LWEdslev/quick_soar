@@ -263,8 +263,7 @@ impl Application for AppState {
                 };
                 let class: Option<String> = {
                     let url = self.input.clone();
-                    let mut parts = url.split("/").collect::<Vec<&str>>();
-                    println!("partslen is {}", parts.len());
+                    let parts = url.split("/").collect::<Vec<&str>>();
                     match parts.iter().position(|p| p.starts_with("results")) {
                         None => None,
                         Some(index) => {
