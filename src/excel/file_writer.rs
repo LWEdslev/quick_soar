@@ -88,6 +88,11 @@ fn draw_data_cell_at<T: Into<CellCoordinates>>(worksheet: &mut Worksheet, cell: 
     let extreme = &cell.extreme;
     let cell_value = &cell.value;
     let cell = match cell_value {
+        CellValue::Float(val) if val.is_nan() || val.is_infinite() => {
+            let cell = worksheet.get_cell_mut(coord).set_value_from_string("---");
+            cell.get_style_mut().get_alignment_mut().set_horizontal(HorizontalAlignmentValues::Center);
+            cell
+        }
         CellValue::Float(val) => {
             let cell = worksheet.get_cell_mut(coord).set_value_number(*val);
             cell.get_style_mut().get_numbering_format_mut().set_format_code(NumberingFormat::FORMAT_NUMBER_00);
