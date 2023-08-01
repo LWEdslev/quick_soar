@@ -1,28 +1,20 @@
-### Parser (target: 20 feb)
-- **OK** Fix
-- **OK** Turnpoint
-- **OK** Task info
-  - **OK** Make structs
-  - **OK** Implement functionality
-- **OK** Pilot info
-### Analysis (target: 1 mar)
-- **OK** Utility
-  - **OK** Distance
-  - **OK** Inside turnpoint
-- **OK** Segmenting
-- **OK** Calculation
-
-### Soup (target: 10 mar)
-- **OK** Reqwest
-  - **OK** Get html
-  - **OK** Get files
-- **OK** Table extractor
-
-### XSSF  (target: 17 mar)
-- Simple excel writer
-
-### GUI (target: 24 mar)
-- Iced
-
-### Later
-- Add support for other turnpoint types than simple beer can
+#### Remove many unwraps (unwrap counter = 177). 
+  - Urgency: medium
+  - Difficulty: medium
+  - Time: high
+#### Add support for other turnpoint types than simple beer can. 
+  - Urgency: low
+  - Difficulty: high
+  - Time: medium
+#### Filter obscure logs with incorrect lat/lon. 
+  - Urgency: low
+  - Difficulty: low
+  - Time: low
+#### Add algorithm for better landout detection. 
+  - Urgency: medium
+  - Difficulty: high
+  - Time: medium
+#### Documentation. 
+  - Urgency: low
+  - Difficulty: low
+  - Time: high
