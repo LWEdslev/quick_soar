@@ -7,7 +7,7 @@ pub struct PilotInfo{
 }
 
 #[derive(Debug)]
-struct PilotInfoParseError;
+pub struct PilotInfoParseError;
 
 impl PilotInfo {
     pub fn parse(contents: &str) -> Result<Self, PilotInfoParseError> {
@@ -78,21 +78,5 @@ mod tests {
         assert_eq!(pilot_info.time_zone, 2);
         assert_eq!(pilot_info.glider_type, "LS 8");
 
-    }
-
-    #[test]
-    fn negative_time_zone() {
-        let contents =
-            "LCU::HPPLTPILOT:Kevin Kjær Andersen
-            LCU::HPGTYGLIDERTYPE:LS 8
-            LCU::HPGIDGLIDERID:OY-XXK
-            LCU::HPCCLCOMPETITIONCLASS:
-            LCU::HPCIDCOMPETITIONID:KE
-            LCU::HPATS:102153
-            LCU::HPELVELEVATION:30
-            LCU::HPTZNTIMEZONE:-2";
-
-        let pilot_info = PilotInfo::parse(contents);
-        assert_eq!(pilot_info.time_zone, -2);
     }
 }

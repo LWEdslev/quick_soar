@@ -63,7 +63,7 @@ fn add_non_data_formatting(worksheet: &mut Worksheet, date: &str, task_piece: Ta
     task_piece_cell.set_value_from_string(task_piece_string);
     task_piece_cell.get_style_mut().set_background_color_solid("FF9999FF").get_font_mut().set_name("Times New Roman").set_font_size(FontSize::default().set_val(10.).clone()).set_bold(true);
     task_piece_cell.get_style_mut().get_alignment_mut().set_horizontal(HorizontalAlignmentValues::Center);
-    worksheet.add_merge_cells("B1:R1");
+    worksheet.add_merge_cells("B1:S1");
 }
 
 fn add_column_to_worksheet<T: Into<CellCoordinates>>(worksheet: &mut Worksheet, column: &ColumnHeader, data: &Vec<DataCell>, top_coord: T) {
@@ -137,6 +137,7 @@ enum ColumnHeader {
     StartTime,
     FinishTime,
     StartAlt,
+    FinishAlt,
     ClimbSpeed,
     ClimbRate,
     CruiseSpeed,
@@ -156,6 +157,7 @@ impl ColumnHeader {
         match self {
             StartTime => "Start time (Local)",
             StartAlt => "Start altitude (MSL)",
+            FinishAlt => "Finish altitude (MSL)",
             Ranking => "Ranking",
             Airplane => "Airplane",
             Callsign => "Callsign",
@@ -180,7 +182,7 @@ impl ColumnHeader {
         match self {
             Ranking | Airplane | Callsign | StartTime | FinishTime | GlideRatio => None,
             Distance => Some("[km]"),
-            StartAlt => Some("[m]"),
+            StartAlt | FinishAlt => Some("[m]"),
             ClimbRate => Some("[m/s]"),
             CruiseSpeed | Speed | ClimbSpeed => Some("[km/h]"),
             CruiseDistance => Some("[km]"),
@@ -194,7 +196,7 @@ impl ColumnHeader {
             Ranking | Airplane  | Callsign | Distance | StartTime | FinishTime => Colorizable::Never,
             StartAlt => Colorizable::Always,
             ClimbRate | ClimbSpeed | CruiseSpeed | CruiseDistance | GlideRatio
-            | ExcessDistance | Speed | TurningPercentage | ThermalAltLoss | PercentBelow500 | ThermalDrift  => Colorizable::OnlyOnFinish
+            | ExcessDistance | Speed | TurningPercentage | ThermalAltLoss | PercentBelow500 | ThermalDrift | FinishAlt  => Colorizable::OnlyOnFinish
         }
     }
 
@@ -202,7 +204,7 @@ impl ColumnHeader {
         use ColumnHeader::*;
         use Extreme::*;
         match self {
-            StartAlt | ClimbRate | CruiseSpeed | CruiseDistance | GlideRatio | Speed | ThermalDrift => Best,
+            StartAlt | FinishAlt | ClimbRate | CruiseSpeed | CruiseDistance | GlideRatio | Speed | ThermalDrift => Best,
             ExcessDistance | TurningPercentage | ClimbSpeed | ThermalAltLoss | PercentBelow500 => Worst,
             _ => None,
         }
@@ -269,6 +271,16 @@ impl ColumnHeader {
                 data.iter().map(|d| {
                     let calc = &d;
                     let alt = calc.start_alt(task_piece);
+                    match alt {
+                        None => CellValue::None,
+                        Some(alt) => CellValue::Int(alt)
+                    }
+                }).collect::<Vec<CellValue>>()
+            }
+            FinishAlt => {
+                data.iter().map(|d| {
+                    let calc = &d;
+                    let alt = calc.finish_alt(task_piece);
                     match alt {
                         None => CellValue::None,
                         Some(alt) => CellValue::Int(alt)

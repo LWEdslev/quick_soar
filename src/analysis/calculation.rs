@@ -255,6 +255,19 @@ impl Calculation {
         }
     }
 
+    pub fn finish_alt(&self, task_piece: TaskPiece) -> Option<Meters> {
+        match task_piece {
+            TaskPiece::EntireTask => {
+                let fix = self.total_flight.fixes.last()?;
+                Some(fix.alt_igc)
+            }
+            TaskPiece::Leg(leg_number) => {
+                let leg = (self.legs.get(leg_number))?.as_ref()?;
+                Some(leg.fixes.last()?.alt_igc)
+            }
+        }
+    }
+
     pub fn climb_ground_speed(&self, task_piece: TaskPiece) -> Option<Kph> {
         self.get_avg_speed_of_segment(task_piece, false)
     }

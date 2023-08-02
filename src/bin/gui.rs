@@ -235,7 +235,7 @@ impl Application for AppState {
                         Some(task) => {
                             let fixes = parser::util::get_fixes(&content);
                             let flight = analysis::segmenting::Flight::make(fixes);
-                            let pilot_info = parser::pilot_info::PilotInfo::parse(&content);
+                            let pilot_info = parser::pilot_info::PilotInfo::parse(&content).unwrap();
                             let time_zone = pilot_info.time_zone;
 
                             // I have to do stupid shit like this when you don't derive Clone in you APIs!!!

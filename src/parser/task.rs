@@ -20,7 +20,10 @@ impl DescriptionElem {
 
         let regex = Regex::new(format!("{start}[0-9]+{end}").as_str()).expect("regex failed to compile");
         let re_match = regex.find(description);
-        re_match.map(|m| description[m.start()+start.len() .. m.end()-end.len()].parse().ok()?)
+        re_match.map(|m| match description[m.start()+start.len() .. m.end()-end.len()].parse().ok() {
+            Some(num) => num,
+            None => panic!("failed to parse number from {description}"),
+        })
     }
 }
 
