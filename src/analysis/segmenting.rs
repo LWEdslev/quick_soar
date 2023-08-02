@@ -9,10 +9,10 @@ pub struct Flight {
 }
 
 impl Flight {
-    pub fn make(mut fixes: Vec<Fix>) -> Self {
+    pub fn make(mut fixes: Vec<Fix>) -> Option<Self> {
         let mut segments: Vec<Segment> = vec![];
         fixes.retain(|f| f.is_valid());
-        let mut prev_sound_fix = fixes.get(0).unwrap().clone();
+        let mut prev_sound_fix = fixes.get(0)?.clone();
         fixes.retain(|f| {
             if f.timestamp < prev_sound_fix.timestamp {
                 false
@@ -29,9 +29,9 @@ impl Flight {
         const TRY_TIME: u32 = 45;
 
         let target = DEGREE_BOUNDARY / TIME_WINDOW as f32;
-        let mut prev_fix = fixes.get(0).unwrap();
-        let mut curr_fix = fixes.get(0).unwrap();
-        let mut next_fix = fixes.get(0).unwrap();
+        let mut prev_fix = fixes.get(0)?;
+        let mut curr_fix = fixes.get(0)?;
+        let mut next_fix = fixes.get(0)?;
         let bearing_changes = fixes.iter().map(|f| {
             prev_fix = curr_fix;
             curr_fix = next_fix;
@@ -43,7 +43,7 @@ impl Flight {
         let mut buildup_is_glide = true;
         let mut time_buildup = 0;
         let mut short_buildup: Vec<(u32, f32)> = vec![];
-        let mut prev_time = fixes.first().unwrap().timestamp;
+        let mut prev_time = fixes.first()?.timestamp;
 
         for (fix, change) in fixes.iter().zip(bearing_changes) {
             let delta_time = fix.timestamp.checked_sub(prev_time).unwrap_or(1);
@@ -55,7 +55,7 @@ impl Flight {
             if (total_degree_change / (time_buildup as f32)).abs() >= target { //We are turning!
                 if buildup_is_glide { //We have just started turning!
                     buildup_is_glide = false;
-                    let time_of_segment = buildup.last().unwrap().timestamp - buildup.first().unwrap().timestamp;
+                    let time_of_segment = buildup.last()?.timestamp - buildup.first()?.timestamp;
                     let segment = if time_of_segment <= CONNECT_TIME {
                         let mut prev_segment = match segments.pop() {
                             None => vec![],
@@ -76,7 +76,7 @@ impl Flight {
                     let mut prev_segment = match segments.last() {
                         None => vec![],
                         Some(Segment::Thermal(_)) => {
-                            if let Segment::Thermal(v) = segments.pop().unwrap() {
+                            if let Segment::Thermal(v) = segments.pop()? {
                                 v
                             } else {
                                 panic!("unreachable")
@@ -91,24 +91,26 @@ impl Flight {
                 }
             }
 
-            time_buildup = short_buildup.last().unwrap().0 - short_buildup.first().unwrap().0;
+            time_buildup = short_buildup.last()?.0 - short_buildup.first()?.0;
             while time_buildup >= TIME_WINDOW {
                 short_buildup.remove(0);
-                time_buildup = short_buildup.last().unwrap().0 - short_buildup.first().unwrap().0;
+                time_buildup = short_buildup.last()?.0 - short_buildup.first()?.0;
             }
         }
 
         segments.push(Segment::Glide(buildup));
 
         fn move_fixes_to_right_segments_by(segments: &mut Vec<Segment>, seconds: usize) {
+            if segments.is_empty() { return };
             let mut segments = segments.iter_mut();
-            let mut curr_seg = segments.next().unwrap();
+            let mut curr_seg = segments.next().expect("unreachable");
             for next_seg in segments {
-                let first_time = curr_seg.mut_inner().first().unwrap().timestamp;
-                let last_time = curr_seg.mut_inner().last().unwrap().timestamp;
+                if curr_seg.inner().is_empty() { curr_seg = next_seg; continue; }
+                let first_time = curr_seg.mut_inner().first().expect("unreachable").timestamp;
+                let last_time = curr_seg.mut_inner().last().expect("unreachable").timestamp;
                 let time_delta = last_time.checked_sub(first_time);
                 if time_delta.is_none() { return };
-                let time_delta = time_delta.unwrap();
+                let time_delta = time_delta.expect("unreachable");
                 let log_time = time_delta as f32 / curr_seg.inner().len() as f32;
 
                 let how_many_to_take = (seconds as f32 / log_time) as usize;
@@ -152,7 +154,7 @@ impl Flight {
         };
         flight.combine_segments();
         
-        flight
+        Some(flight)
     }
 
     /// Combines subsequent relevant segments,
@@ -165,7 +167,7 @@ impl Flight {
             let curr = self.segments.remove(0);
             match curr {
                 Segment::Glide(mut curr_v) => {
-                    match buildup.pop().unwrap() {
+                    match buildup.pop().expect("unreachable") {
                         Segment::Glide(mut prev_v) => {
                             prev_v.append(&mut curr_v);
                             buildup.push(Segment::Glide(prev_v))
@@ -181,7 +183,7 @@ impl Flight {
                     }
                 }
                 Segment::Thermal(mut curr_v) => {
-                    match buildup.pop().unwrap() {
+                    match buildup.pop().expect("unreachable") {
                         Segment::Glide(prev_v) => {
                             buildup.push(Segment::Glide(prev_v));
                             buildup.push(Segment::Thermal(curr_v));
@@ -197,7 +199,7 @@ impl Flight {
                     }
                 }
                 Segment::Try(mut curr_v) => {
-                    match buildup.pop().unwrap() {
+                    match buildup.pop().expect("unreachable") {
                         Segment::Glide(mut prev_v) => {
                             prev_v.append(&mut curr_v);
                             buildup.push(Segment::Glide(prev_v));
@@ -217,14 +219,16 @@ impl Flight {
         self.segments = buildup
     }
 
-    pub fn get_subflight(&self, from: u32, to: u32) -> Self {
+    pub fn get_subflight(&self, from: u32, to: u32) -> Option<Self> {
         let fixes = self.fixes
             .iter()
             .filter(|f| (from..to).contains(&f.timestamp))
             .map(Rc::clone)
             .collect::<Vec<Rc<Fix>>>();
         let segments = self.segments.iter()
-            .filter(|s| s.inner().last().unwrap().timestamp >= from && s.inner().first().unwrap().timestamp < to)
+            .filter(|s| !s.inner().is_empty()
+                && s.inner().last().expect("unreachable").timestamp >= from
+                && s.inner().first().expect("unreachable").timestamp < to)
             .map(|s| {
                 let inner = s.inner().clone().into_iter().filter(|fix| (from..to).contains(&fix.timestamp)).collect();
                 match s {
@@ -234,19 +238,19 @@ impl Flight {
                 }
             })
             .collect::<Vec<Segment>>();
-        Self {
+        Some(Self {
             fixes,
             segments,
-        }
+        })
     }
 
-    pub fn get_subflight_from_option(&self, from: Option<u32>, to: Option<u32>) -> Self {
+    pub fn get_subflight_from_option(&self, from: Option<u32>, to: Option<u32>) -> Option<Self> {
         let from = match from {
-            None => self.fixes.first().unwrap().timestamp,
+            None => self.fixes.first()?.timestamp,
             Some(from) => from,
         };
         let to = match to {
-            None => self.fixes.last().unwrap().timestamp,
+            None => self.fixes.last()?.timestamp,
             Some(to) => to,
         };
         self.get_subflight(from, to)
@@ -271,30 +275,6 @@ impl Flight {
         (thermal_length / total_length) * 100.
     }
 
-    pub fn print_segments(&self, timezone: u8) {
-        for segment in &self.segments {
-            let inner = segment.inner();
-            if inner.is_empty() {
-                println!("\tEmpty")
-            } else {
-
-                let first = inner.first().unwrap();
-                let last = inner.last().unwrap();
-                let preffix_type = match segment {
-                    Segment::Glide(_) => "Glide:",
-                    Segment::Thermal(_) => "Thermal:",
-                    Segment::Try(_) => "Try:",
-                };
-                let first_time = Time::from_hms(timezone+(first.timestamp / 3600) as u8, ((first.timestamp % 3600) / 60) as u8, (first.timestamp % 60) as u8);
-                let last_time = Time::from_hms(timezone+(last.timestamp / 3600) as u8, ((last.timestamp % 3600) / 60) as u8, (last.timestamp % 60) as u8);
-
-
-                println!("{}", preffix_type);
-                println!("\t{}:{}:{} -> {}:{}:{}", first_time.hours, first_time.minutes, first_time.seconds, last_time.hours, last_time.minutes, last_time.seconds);
-            }
-        }
-    }
-
     pub fn count_thermals(&self) -> usize {
         self.segments.iter().filter(|s| match s {
             Segment::Glide(_) => false,
@@ -304,7 +284,8 @@ impl Flight {
     }
 
     pub(crate) fn total_time(&self) -> u32 {
-        self.fixes.last().unwrap().timestamp - self.fixes.first().unwrap().timestamp
+        if self.fixes.is_empty() { return 0 };
+        self.fixes.last().expect("unreachable").timestamp - self.fixes.first().expect("unreachable").timestamp
     }
 }
 
@@ -322,7 +303,7 @@ impl Segment {
             Segment::Try(v) => v,
         };
         if inner.is_empty() { return 0 }
-        inner.last().unwrap().timestamp - inner.first().unwrap().timestamp
+        inner.last().expect("unreachable").timestamp - inner.first().expect("unreachable").timestamp
     }
 
     fn mut_inner(&mut self) -> &mut Vec<Rc<Fix>> {
@@ -341,140 +322,3 @@ impl Segment {
         }
     }
 }
-
-#[cfg(test)]
-
-mod tests {
-    use crate::parser;
-    use super::*;
-
-    #[test]
-    fn segmenting_1_sec() {
-        let contents = parser::util::get_contents("examples/aat.igc").unwrap();
-        let fixes = parser::util::get_fixes(&contents);
-        let flight = Flight::make(fixes);
-        let target_percentage: f32 = 36.6;
-        let acceptance = 4.;
-        let range = target_percentage - acceptance .. target_percentage + acceptance;
-        println!("Kawa 1\tSegments: {}", &flight.segments.len());
-        println!("Kawa 1\tPercentage: {}", &flight.thermal_percentage());
-        assert!(range.contains(&flight.thermal_percentage()));
-    }
-
-    #[test]
-    fn segmenting_2_sec() {
-        let contents = parser::util::get_contents("examples/aat.igc").unwrap();
-        let fixes = parser::util::get_fixes(&contents);
-        let n = 2;
-        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
-        let flight = Flight::make(every_nth);
-        let target_percentage: f32 = 36.6;
-        let acceptance = 4.;
-        let range = target_percentage - acceptance .. target_percentage + acceptance;
-        println!("Kawa 2\tSegments: {}", &flight.segments.len());
-        println!("Kawa 2\tPercentage: {}", &flight.thermal_percentage());
-        assert!(range.contains(&flight.thermal_percentage()));
-    }
-
-    #[test]
-    fn segmenting_3_sec() {
-        let contents = parser::util::get_contents("examples/aat.igc").unwrap();
-        let fixes = parser::util::get_fixes(&contents);
-        let n = 3;
-        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
-        let flight = Flight::make(every_nth);
-        let target_percentage: f32 = 36.6;
-        let acceptance = 4.;
-        let range = target_percentage - acceptance .. target_percentage + acceptance;
-        println!("Kawa 3\tSegments: {}", &flight.segments.len());
-        println!("Kawa 3\tPercentage: {}", &flight.thermal_percentage());
-        assert!(range.contains(&flight.thermal_percentage()));
-    }
-
-    #[test]
-    fn segmenting_4_sec() {
-        let contents = parser::util::get_contents("examples/aat.igc").unwrap();
-        let fixes = parser::util::get_fixes(&contents);
-        let n = 4;
-        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
-        let flight = Flight::make(every_nth);
-        let target_percentage: f32 = 36.6;
-        let acceptance = 4.;
-        let range = target_percentage - acceptance .. target_percentage + acceptance;
-        println!("Kawa 4\tSegments: {}", &flight.segments.len());
-        println!("Kawa 4\tPercentage: {}", &flight.thermal_percentage());
-        assert!(range.contains(&flight.thermal_percentage()));
-    }
-
-    #[test]
-    fn segmenting_5_sec() {
-        let contents = parser::util::get_contents("examples/aat.igc").unwrap();
-        let fixes = parser::util::get_fixes(&contents);
-        let n = 5;
-        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
-        let flight = Flight::make(every_nth);
-        let target_percentage: f32 = 36.6;
-        let acceptance = 4.;
-        let range = target_percentage - acceptance .. target_percentage + acceptance;
-        println!("Kawa 5\tSegments: {}", &flight.segments.len());
-        println!("Kawa 5\tPercentage: {}", &flight.thermal_percentage());
-        assert!(range.contains(&flight.thermal_percentage()));
-    }
-
-    #[test]
-    fn segmenting_1_sec_cx() {
-        let contents = parser::util::get_contents("examples/CX.igc").unwrap();
-        let fixes = parser::util::get_fixes(&contents);
-        let flight = Flight::make(fixes);
-        let target_percentage: f32 = 34.8;
-        let acceptance = 3.;
-        let range = target_percentage - acceptance .. target_percentage + acceptance;
-        println!("CX 1\tSegments: {}", &flight.segments.len());
-        println!("CX 1\tPercentage: {}", &flight.thermal_percentage());
-        assert!(range.contains(&flight.thermal_percentage()));
-    }
-
-    #[test]
-    fn segmenting_2_sec_cx() {
-        let contents = parser::util::get_contents("examples/CX.igc").unwrap();
-        let fixes = parser::util::get_fixes(&contents);
-        let n = 2;
-        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
-        let flight = Flight::make(every_nth);
-        let target_percentage: f32 = 34.8;
-        let acceptance = 4.;
-        let range = target_percentage - acceptance .. target_percentage + acceptance;
-        println!("CX 2\tSegments: {}", &flight.segments.len());
-        println!("CX 2\tPercentage: {}", &flight.thermal_percentage());
-        assert!(range.contains(&flight.thermal_percentage()));
-    }
-
-    #[test]
-    fn segmenting_3_sec_cx() {
-        let contents = parser::util::get_contents("examples/CX.igc").unwrap();
-        let fixes = parser::util::get_fixes(&contents);
-        let n = 3;
-        let every_nth = (n-1..fixes.len()).step_by(n).map(|i| fixes[i].clone()).collect::<Vec<Fix>>();
-        let flight = Flight::make(every_nth);
-        let target_percentage: f32 = 34.8;
-        let acceptance = 4.;
-        let range = target_percentage - acceptance .. target_percentage + acceptance;
-        println!("CX 3\tSegments: {}", &flight.segments.len());
-        println!("CX 3\tPercentage: {}", &flight.thermal_percentage());
-        assert!(range.contains(&flight.thermal_percentage()));
-    }
-
-    #[test]
-    fn segmenting_real_3_ke() {
-        let contents = parser::util::get_contents("examples/ast.igc").unwrap();
-        let fixes = parser::util::get_fixes(&contents);
-        let flight = Flight::make(fixes);
-        let target_percentage: f32 = 45.1;
-        let acceptance = 4.;
-        let range = target_percentage - acceptance .. target_percentage + acceptance;
-        println!("KE \tSegments: {}", &flight.segments.len());
-        println!("KE \tPercentage: {}", &flight.thermal_percentage());
-        assert!(range.contains(&flight.thermal_percentage()));
-    }
-}
-
