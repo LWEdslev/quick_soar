@@ -245,7 +245,7 @@ impl Application for AppState {
                             };
                             let start_time = match start_time { None => None, Some(mut time) => { time.offset(-time_zone); Some(time.seconds_since_midnight()) } };
                             let calculation = Calculation::new(task, flight, pilot_info, start_time, speed, dist);
-                            Some(calculation)
+                            calculation
                         },
                     }
                 };
