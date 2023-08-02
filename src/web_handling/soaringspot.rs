@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::{fs, io};
+use std::error::Error;
 use std::path::Path;
 use igc::util::Time;
 use table_extract::Table;
@@ -33,7 +34,7 @@ impl SoaringSpot {
         let start = "<a href=&quot;";
         let end = "&quot;>";
         let regex_string = start.to_owned() + ".*" + end;
-        let regex = regex::Regex::new(regex_string.as_str()).unwrap();
+        let regex = regex::Regex::new(regex_string.as_str()).expect("invalid regex");
 
         self.table.iter().map(|row| {
             row.get("CN").unwrap_or("no CN data").to_string()
@@ -73,20 +74,22 @@ impl SoaringSpot {
     }
 }
 
-pub async fn download(link: &String, path: &String, index: usize) {
+pub async fn download(link: &String, path: &String, index: usize) -> Result<(), Box<dyn Error>> {
     let filename = format!("{:0>3}.igc", index + 1);
-    let resp = reqwest::get(link).await.unwrap().bytes().await.unwrap();
-    let mut file = File::create(path.to_string() + &*filename).unwrap();
+    let resp = reqwest::get(link).await?.bytes().await?;
+    let mut file = File::create(path.to_string() + &*filename)?;
     io::copy(&mut resp.as_ref(), &mut file).expect("failed to copy content");
+    Ok(())
 }
 
 /// Delete all files in a directory (not recursively) but keep the directory and subdirectories
-pub fn delete_files_in_dir(dir: &str) {
-    fs::read_dir(dir)
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
+pub fn delete_files_in_dir(dir: &str) -> io::Result<()> {
+    fs::read_dir(dir)?
+        .map(|entry| entry.expect("unreachable").path())
         .filter(|path| path.is_file())
-        .for_each(|file| fs::remove_file(file).unwrap());
+        .map(|file| fs::remove_file(file))
+        .collect::<Result<Vec<()>, io::Error>>()?;
+    Ok(())
 }
 
 /// Make a file name unique by adding a number to the end of the file name if the file already exists
