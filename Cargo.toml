@@ -20,4 +20,5 @@ colored = "2.0.0"
 iced = { version = "0.9.0", features = ["tokio", "image"] }
 iced_native = "0.10.3"
 image = "0.24.6"
+thiserror = "1.0.44"
 

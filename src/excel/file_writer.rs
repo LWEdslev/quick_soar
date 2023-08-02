@@ -7,21 +7,39 @@ use crate::analysis::util::Offsetable;
 use enum_iterator::{all, Sequence};
 use igc::util::Date;
 use umya_spreadsheet::helper::coordinate::CellCoordinates;
+use thiserror::Error;
 
 const GOOD_COLOR: &str = "FFCCFFCC";
 const BAD_COLOR: &str = "FFFF99CC";
 
-pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>, date: Date) {
+#[derive(Debug, Error)]
+pub enum ExcelError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Excel error")]
+    Excel,
+    #[error("Xlsx error: {0}")]
+    XlsxError(#[from] writer::xlsx::XlsxError),
+}
+
+pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>, date: Date) -> Result<(), ExcelError> {
     let path = std::path::Path::new(path);
     fs::remove_file(path).unwrap_or(()); //remove if present
     let mut book = new_file();
     let date_string = format!("{}-{}-{}", date.day, date.month, date.year);
-    let entire_flight = book.new_sheet("Entire flight").unwrap();
+    let entire_flight = match book.new_sheet("Entire flight") {
+        Ok(ws) => ws,
+        Err(_) => return Err(ExcelError::Excel),
+    };
     add_non_data_formatting(entire_flight, date_string.as_str(), TaskPiece::EntireTask);
-    task.points.windows(2).enumerate().for_each(|(index, _)| {
-        let ws = book.new_sheet("Placeholder").unwrap();
+    task.points.windows(2).enumerate().map(|(index, _)| {
+        let ws = match book.new_sheet("Placeholder") {
+            Ok(ws) => ws,
+            Err(_) => return Err(ExcelError::Excel),
+        };
         add_non_data_formatting(ws, date_string.as_str(), TaskPiece::Leg(index + 1));
-    });
+        Ok(())
+    }).collect::<Result<_, ExcelError>>()?;
 
     let columns = all::<ColumnHeader>().collect::<Vec<ColumnHeader>>();
 
@@ -29,24 +47,24 @@ pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>, date: D
 
     for (index, column) in columns.iter().enumerate() {
         let coord = CellCoordinates { row: 2, col: (index + 1) as u32 };
-        add_column_to_worksheet(book.get_sheet_mut(&1).unwrap(), column, formatted_data.get(column).unwrap(), coord);
-        book.get_sheet_mut(&1).unwrap().get_row_dimension_mut(&2).set_height(120.);
+        add_column_to_worksheet(book.get_sheet_mut(&1).expect("unreachable"), column, formatted_data.get(column).expect("unreachable"), coord);
+        book.get_sheet_mut(&1).expect("unreachable").get_row_dimension_mut(&2).set_height(120.);
     }
 
     book.remove_sheet(0).unwrap_or(()); //removes sheet that is created when the book is created
 
     for (index, _) in task.points.windows(2).enumerate() {
         let formatted_data = format_data(data, TaskPiece::Leg(index));
-        let ws = book.get_sheet_mut(&(index+1)).unwrap();
+        let ws = book.get_sheet_mut(&(index+1)).expect("unreachable");
         ws.get_row_dimension_mut(&2).set_height(120.);
         for (index, column) in columns.iter().enumerate() {
             let coord = CellCoordinates { row: 2, col: (index + 1) as u32 };
-            add_column_to_worksheet(ws, column, formatted_data.get(column).unwrap(), coord);
+            add_column_to_worksheet(ws, column, formatted_data.get(column).expect("unreachable"), coord);
         }
     }
 
-    writer::xlsx::write(&book, path).unwrap();
-
+    writer::xlsx::write(&book, path)?;
+    Ok(())
 }
 
 fn add_non_data_formatting(worksheet: &mut Worksheet, date: &str, task_piece: TaskPiece) {
@@ -432,8 +450,8 @@ impl ColumnHeader {
                     .min_by(min_max_closure);
 
                 values.iter().map(|v| {
-                    let is_max = max.is_some() && v.is_numerically_equal_to(max.unwrap());
-                    let is_min = min.is_some() && v.is_numerically_equal_to(min.unwrap());
+                    let is_max = max.is_some() && v.is_numerically_equal_to(max.expect("unreachable"));
+                    let is_min = min.is_some() && v.is_numerically_equal_to(min.expect("unreachable"));
                     if is_max {
                         high_val.clone()
                     } else if is_min {
@@ -472,8 +490,8 @@ impl ColumnHeader {
                 }).map(|(v, _finished)| v).min_by(min_max_closure);
 
                 values.iter().map(|v| {
-                    let is_max = max.is_some() && v.is_numerically_equal_to(max.unwrap());
-                    let is_min = min.is_some() && v.is_numerically_equal_to(min.unwrap());
+                    let is_max = max.is_some() && v.is_numerically_equal_to(max.expect("unreachable"));
+                    let is_min = min.is_some() && v.is_numerically_equal_to(min.expect("unreachable"));
                     if is_max {
                         high_val.clone()
                     } else if is_min {

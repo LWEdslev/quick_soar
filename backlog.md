@@ -1,5 +1,5 @@
 ## Priority list
-- [ ] Remove many unwraps (unwrap counter = 153).
+- [ ] Remove many unwraps (unwrap counter = 141).
 - [ ] Filter obscure logs with incorrect lat/lon.
 - [ ] Add algorithm for better landout detection.
 - [ ] Documentation.
