@@ -58,6 +58,7 @@ enum ProgressState {
     Analyzing(Frac),
     Finished,
     IncorrectURL,
+    Error(GUIError),
 }
 
 #[derive(Clone, Debug)]
@@ -70,6 +71,7 @@ enum Message {
     Analyzed(Frac),
     PostAnalysis(Result<(), GUIError>),
     OpenFile, // Button
+    Error(GUIError),
 }
 
 struct AppState {
@@ -137,6 +139,10 @@ impl Application for AppState {
 
         println!("{:?}", message);
         match message {
+            Message::Error(error) => {
+                self.progress = ProgressState::Error(error);
+                Command::none()
+            }
             Message::UrlChanged(new_url) => {
                 self.input = new_url;
                 Command::none()
@@ -191,21 +197,29 @@ impl Application for AppState {
             }
 
             Message::PreAnalysis(_) => {
-                let mut paths: Vec<_> = fs::read_dir(&PathStrategy::new().get_path()).unwrap()
-                    .map(|r| r.unwrap())
+                let mut paths: Vec<_> = match fs::read_dir(&PathStrategy::new().get_path()) {
+                    Ok(paths) => paths,
+                    Err(_) => return Command::perform(async {GUIError::FailedDownloading}, Message::Error),
+                }
+                    .filter_map(|r| r.ok())
                     .filter(|dir| dir.path().is_file())
                     .collect();
                 paths.sort_by_key(|dir| dir.path());
                 let contents = paths.into_iter().map(|path| {
-                    parser::util::get_contents(path.path().display().to_string().as_str()).unwrap()
-                }).collect::<Vec<String>>();
+                    parser::util::get_contents(path.path().display().to_string().as_str()).ok()
+                }).collect::<Option<Vec<String>>>();
+
+                let contents = match contents {
+                    Some(contents) => contents,
+                    None => return Command::perform(async {GUIError::FailedDownloading}, Message::Error),
+                };
 
                 async fn pre_analysis(length: usize) -> Frac {
                     Frac(0, length)
                 }
 
-                let spot = self.soaringspot.as_ref().unwrap();
-                let date = get_date(contents[0].as_str()).unwrap();
+                let spot = self.soaringspot.as_ref().expect("unreachable");
+                let date = get_date(contents[0].as_str()).unwrap_or(Date::from_dmy(1, 1, 1));
                 let start_times = spot.get_start_times();
                 let speeds = spot.get_speeds();
                 let distances = spot.get_distances();
@@ -225,27 +239,31 @@ impl Application for AppState {
             }
 
             Message::Analyzed(Frac(analyzed, total)) => {
-                let content = self.contents.get(analyzed).unwrap().clone();
-                let speed = self.speeds.get(analyzed).unwrap().clone();
-                let dist = self.distances.get(analyzed).unwrap().clone();
-                let start_time = self.start_times.get(analyzed).unwrap().clone();
+                let content = self.contents[analyzed].clone();
+                let speed = self.speeds[analyzed].clone();
+                let dist = self.distances[analyzed].clone();
+                let start_time = self.start_times[analyzed].as_ref();
                 let calc: Option<Calculation> = {
                     match Task::parse(&content).ok() {
                         None => None,
                         Some(task) => {
                             let fixes = parser::util::get_fixes(&content);
                             let flight = analysis::segmenting::Flight::make(fixes);
-                            let pilot_info = parser::pilot_info::PilotInfo::parse(&content).unwrap();
-                            let time_zone = pilot_info.time_zone;
+                            let pilot_info = parser::pilot_info::PilotInfo::parse(&content);
+                            if let (Some(flight), Ok(pilot_info)) = (flight, pilot_info) {
+                                let time_zone = pilot_info.time_zone;
 
-                            // I have to do stupid shit like this when you don't derive Clone in you APIs!!!
-                            let start_time = match start_time {
-                                None => None,
-                                Some(time) => Some(Time::from_hms(time.hours, time.minutes, time.seconds)),
-                            };
-                            let start_time = match start_time { None => None, Some(mut time) => { time.offset(-time_zone); Some(time.seconds_since_midnight()) } };
-                            let calculation = Calculation::new(task, flight?, pilot_info, start_time, speed, dist);
-                            calculation
+                                // I have to do stupid shit like this when you don't derive Clone in you APIs!!!
+                                let start_time = match start_time {
+                                    None => None,
+                                    Some(time) => Some(Time::from_hms(time.hours, time.minutes, time.seconds)),
+                                };
+                                let start_time = match start_time { None => None, Some(mut time) => { time.offset(-time_zone); Some(time.seconds_since_midnight()) } };
+                                let calculation = Calculation::new(task, flight, pilot_info, start_time, speed, dist);
+                                calculation
+                            } else {
+                                None
+                            }
                         },
                     }
                 };
@@ -256,7 +274,7 @@ impl Application for AppState {
 
             Message::PostAnalysis(_) => {
                 self.progress = ProgressState::Finished;
-                let some_calc = self.calculations.first().unwrap();
+                let some_calc = self.calculations.first().expect("calculations are empty, this should be unreachable");
                 let date = match self.date {
                     None => Date::from_dmy(0,0,0),
                     Some(Date { day, month, year }) => Date::from_dmy(day, month, year),
@@ -267,8 +285,11 @@ impl Application for AppState {
                     match parts.iter().position(|p| p.starts_with("results")) {
                         None => None,
                         Some(index) => {
-                            let class = parts.get(index + 1).unwrap();
-                            Some(class.to_string())
+                            if let Some(class) = parts.get(index + 1) {
+                                Some(class.to_string())
+                            } else {
+                                None
+                            }
                         },
                     }
                 };
@@ -284,7 +305,7 @@ impl Application for AppState {
             }
             Message::OpenFile => {
                 println!("Open file");
-                opener::open(self.analysis_path.as_ref().unwrap()).unwrap();
+                opener::open(self.analysis_path.as_ref().expect("unreachable")).expect("failed to open file");
                 Command::none()
             }
         }
@@ -299,6 +320,7 @@ impl Application for AppState {
             ProgressState::Analyzing(frac) => (frac.to_percentage(), format!("Analyzing: {}/{}", frac.0, frac.1)),
             ProgressState::Finished => (100., "Now you can open the analysis".to_string()),
             ProgressState::IncorrectURL => (0., "URL must be from a SoaringSpot competition day".to_string()),
+            ProgressState::Error(_) => (0., "Error".to_string()), // TODO expand this
         };
 
         let input_field = text_input::TextInput::new("", input).size(16).on_input(|s| Message::UrlChanged(s));
@@ -370,7 +392,7 @@ enum FileProgress {
     NotStarted, Started, Finished, Errored
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum GUIError {
     FailedDownloading,
     FailedWriting,

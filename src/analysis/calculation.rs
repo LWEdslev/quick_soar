@@ -48,7 +48,7 @@ impl Calculation {
             }
         };
 
-        let flight = flight.get_subflight_from_option(start_time, Some(last_time));
+        let flight = flight.get_subflight_from_option(start_time, Some(last_time))?;
 
         Some(Self {
             legs,
@@ -496,8 +496,8 @@ impl Calculation {
                         },
                         _ => None,
                     }
-                }).collect::<Vec<Option<Flight>>>();
-                Some(legs)
+                }).collect::<Option<Vec<Option<Flight>>>>();
+                legs
             }
             TaskType::AAT(_) => {
                 //Getting ordered non-overlapping of consecutive sectors inside turnpoints
@@ -556,7 +556,7 @@ impl Calculation {
                         (Some(start), Some(end)) => Some(flight.get_subflight(start, end)),
                         _ => None,
                     }
-                }).collect::<Vec<Option<Flight>>>();
+                }).collect::<Option<Vec<Option<Flight>>>>()?;
 
                 
 
