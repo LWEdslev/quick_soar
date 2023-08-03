@@ -1,6 +1,6 @@
 ## Priority list
 - [x] Remove all unwraps.
-- [ ] Filter obscure logs with incorrect lat/lon.
+- [x] Filter obscure logs with incorrect lat/lon.
 - [ ] Add algorithm for better landout detection.
 - [ ] Documentation.
 - [ ] Add support for other turnpoint types than simple beer can.

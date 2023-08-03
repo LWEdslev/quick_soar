@@ -4,6 +4,7 @@ use crate::parser::util::Fix;
 
 type FloatMeters = f32;
 type Degrees = f32;
+type Mps = f32;
 
 impl Fix {
     pub(crate) fn distance_to(&self, fix: &Fix) -> FloatMeters {
@@ -16,6 +17,11 @@ impl Fix {
         let from = (self.latitude, self.longitude);
         let to = (turnpoint.latitude, turnpoint.longitude);
         distance_between(from, to)
+    }
+
+    pub(crate) fn speed_to(&self, fix: &Fix) -> Mps {
+        let delta_time = fix.timestamp.max(self.timestamp) - self.timestamp.min(fix.timestamp);
+        self.distance_to(fix) / delta_time as f32
     }
 
     fn bearing_to(&self, fix: &Fix) -> Degrees {

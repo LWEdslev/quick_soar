@@ -14,7 +14,7 @@ impl Flight {
         fixes.retain(|f| f.is_valid());
         let mut prev_sound_fix = fixes.get(0)?.clone();
         fixes.retain(|f| {
-            if f.timestamp < prev_sound_fix.timestamp {
+            if f.timestamp < prev_sound_fix.timestamp || f.speed_to(&prev_sound_fix).abs() > 200. {
                 false
             } else {
                 prev_sound_fix = f.clone();
