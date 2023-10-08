@@ -451,9 +451,9 @@ impl Calculation {
 
     fn make_legs(fixes: &Vec<Rc<Fix>>, task: &Task, start_time: Option<Seconds>, flight: &Flight) -> Option<Vec<Option<Flight>>> {
         let mut turnpoints = task.points.iter();
-        let _start_point = turnpoints.next()?;
-        if start_time.is_none() { return Some(turnpoints.map(|_| None).collect::<Vec<Option<Flight>>>()) }; //No start should give no legs
-        let start_time = start_time?;
+        let _start_point = turnpoints.next().unwrap();
+        if start_time.is_none() { return Some(turnpoints.map(|_| None).collect::<Vec<Option<Flight>>>())}; //No start should give no legs
+        let start_time = start_time.unwrap();
         let mut fixes_iter = fixes.iter().filter(|fix| fix.timestamp >= start_time); //get fixes after start
         let start_fix = fixes_iter.next();
         let mut inside_turnpoints = turnpoints.map(|turnpoint| match turnpoint {
@@ -464,40 +464,41 @@ impl Calculation {
                     .collect::<Vec<Rc<Fix>>>()
             }
         }).collect::<Vec<Vec<Rc<Fix>>>>();
-        inside_turnpoints.insert(0, vec![Rc::clone(start_fix.expect("unreachable"))]); //add start as the first turnpoint
+        inside_turnpoints.insert(0, vec![Rc::clone(start_fix.unwrap())]); //add start as the first turnpoint
 
-        let mut curr_time = Some(inside_turnpoints.first()?.first()?.timestamp);
-        let start_time = inside_turnpoints.remove(0).first()?.timestamp;
+        let mut curr_time = Some(inside_turnpoints.first().unwrap().first().unwrap().timestamp);
+        let start_time = inside_turnpoints.remove(0).first().unwrap().timestamp;
         let mut leg_times = inside_turnpoints.iter().map(|in_tp| {
             curr_time?; //landout previously
-            let after_prev = in_tp.iter().filter(|fix| (fix.timestamp >= curr_time.expect("unreachable"))).collect::<Vec<&Rc<Fix>>>();
+            let after_prev = in_tp.iter().filter(|fix| fix.timestamp >= curr_time.unwrap()).collect::<Vec<&Rc<Fix>>>();
             if after_prev.is_empty() { //landout
                 None
             } else {
-                let found = Some(after_prev.first().expect("unreachable").timestamp);
+                let found = Some(after_prev.first().unwrap().timestamp);
                 curr_time = found;
                 found
             }
         }).collect::<Vec<Option<Seconds>>>();
         leg_times.insert(0, Some(start_time));
-        inside_turnpoints.insert(0, vec![Rc::clone(start_fix?)]); //add start as the first turnpoint
+        inside_turnpoints.insert(0, vec![Rc::clone(start_fix.unwrap())]); //add start as the first turnpoint
 
         match task.task_type {
             TaskType::AST => {
                 let legs = leg_times.windows(2).enumerate().map(|(i, window)| {
                     match (window[0], window[1]) {
-                        (Some(start), Some(end)) => Some(flight.get_subflight(start, end)),
+                        (Some(start), Some(end)) => Some(flight.get_subflight(start, end).unwrap()),
                         (Some(start), None) => {
                             let best_fix = fixes.iter()
                                 .filter(|fix| fix.timestamp >= start)
                                 .map(|fix| (fix, fix.distance_to_tp(task.points[i].inner())))
-                                .max_by(|(_x_fix, x_dist),(_y_fix, y_dist)| x_dist.total_cmp(y_dist))?.0;
-                            Some(flight.get_subflight(start, best_fix.timestamp))
+                                .max_by(|(_x_fix, x_dist),(_y_fix, y_dist)| x_dist.total_cmp(y_dist)).unwrap().0;
+                            Some(flight.get_subflight(start, best_fix.timestamp).unwrap())
                         },
                         _ => None,
                     }
-                }).collect::<Option<Vec<Option<Flight>>>>();
-                legs
+                }).collect::<Vec<Option<Flight>>>();
+
+                Some(legs)
             }
             TaskType::AAT(_) => {
                 //Getting ordered non-overlapping of consecutive sectors inside turnpoints
@@ -505,8 +506,8 @@ impl Calculation {
                     let start_leg = leg_time[0];
                     let end_leg = leg_time[1];
                     v.iter().filter(move |fix|
-                        start_leg.is_some() && start_leg.expect("unreachable") <= fix.timestamp
-                    &&  end_leg.is_some() && end_leg.expect("unreachable") > fix.timestamp
+                        start_leg.is_some() && start_leg.unwrap() <= fix.timestamp
+                            &&  end_leg.is_some() && end_leg.unwrap() > fix.timestamp
                     ).map(Rc::clone).collect::<Vec<Rc<Fix>>>()
                 }).collect::<Vec<Vec<Rc<Fix>>>>();
                 let finish_fix = fixes.iter().filter(|fix| match leg_times.last() {
@@ -521,7 +522,7 @@ impl Calculation {
                 let start_fixes = inside_turnpoints.remove(0);
                 if start_fixes.len() == 0 { return Some(inside_turnpoints.iter().map(|i| None).collect::<Vec<Option<Flight>>>()) }
                 inside_turnpoints.pop();
-                let mut prev_optimal = Some(Rc::clone(start_fixes.first()?));
+                let mut prev_optimal = Some(Rc::clone(start_fixes.first().unwrap()));
                 assert_eq!(inside_turnpoints.len(), task.points.windows(3).count());
                 let mut leg_times = task.points.windows(3).zip(inside_turnpoints.iter()).map(|(window, fixes)| {
                     match &prev_optimal {
@@ -530,9 +531,9 @@ impl Calculation {
                             let (_, _, next) = (&window[0], &window[1], &window[2]);
                             let best_fix = fixes.iter()
                                 .max_by(|x, y| {
-                                (x.distance_to_tp(next.inner()) + x.distance_to(prev_optimal_inner))
-                                    .total_cmp(&(y.distance_to_tp(next.inner()) + y.distance_to(prev_optimal_inner)))
-                            });
+                                    (x.distance_to_tp(next.inner()) + x.distance_to(prev_optimal_inner))
+                                        .total_cmp(&(y.distance_to_tp(next.inner()) + y.distance_to(prev_optimal_inner)))
+                                });
 
                             match best_fix {
                                 None => {
@@ -553,12 +554,12 @@ impl Calculation {
                 leg_times.push(finish_fix.map(|fix| fix.timestamp));
                 let legs = leg_times.windows(2).map(|window| {
                     match (window[0], window[1]) {
-                        (Some(start), Some(end)) => Some(flight.get_subflight(start, end)),
+                        (Some(start), Some(end)) => Some(flight.get_subflight(start, end).unwrap()),
                         _ => None,
                     }
-                }).collect::<Option<Vec<Option<Flight>>>>()?;
+                }).collect::<Vec<Option<Flight>>>();
 
-                
+
 
                 Some(legs.into_iter().map(|leg| match leg {
                     None => None,
