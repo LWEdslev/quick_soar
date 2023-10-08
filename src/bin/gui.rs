@@ -37,17 +37,15 @@ pub fn main() -> iced::Result {
             resizable: false,
             decorations: true,
             transparent: false,
-            always_on_top: false,
             icon: Some(icon),
             platform_specific: Default::default(),
+            level: Default::default(),
         },
         flags: (),
         default_font: Default::default(),
-        default_text_size: 30.,
-        text_multithreading: true,
+        default_text_size: 24.,
         antialiasing: true,
         exit_on_close_request: true,
-        try_opengles_first: false,
     })
 }
 
