@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::{fs, io};
 use std::error::Error;
-use std::path::Path;
 use igc::util::Time;
 use table_extract::Table;
 

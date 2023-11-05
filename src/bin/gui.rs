@@ -1,7 +1,5 @@
 #![windows_subsystem = "windows"]
-use std::hash::Hash;
-use std::{fs, thread};
-use std::path::Path;
+use std::fs;
 use iced::{Alignment, Application, Command, Element, executor, Theme, window};
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{button, column, container, row, text, text_input};
@@ -166,7 +164,7 @@ impl Application for AppState {
             }
             Message::GotSoaringspot(Ok(spot)) => {
                 fs::create_dir(&self.path).unwrap_or(());
-                soaringspot::delete_files_in_dir(&self.path);
+                let _ = soaringspot::delete_files_in_dir(&self.path);
                 let links = spot.get_download_links();
                 self.soaringspot = Some(spot);
                 self.links = links;
@@ -188,7 +186,7 @@ impl Application for AppState {
                 let path = self.path.clone();
                 self.progress = ProgressState::Downloading(frac.clone());
                 async fn download(link: Option<String>, path: String, frac: Frac) -> Frac {
-                    if let Some(link) = link { soaringspot::download(&link, &path, frac.0).await; }
+                    if let Some(link) = link { let _ = soaringspot::download(&link, &path, frac.0).await; }
                     frac.increment()
                 }
                 Command::perform(download(link, path, frac.clone()), Message::Downloading)
@@ -295,9 +293,9 @@ impl Application for AppState {
                 println!("analysis path is {}", analysis_path);
                 let analysis_path = soaringspot::make_file_name_unique(analysis_path.as_str());
                 println!("analysis path is {}", analysis_path);
-                soaringspot::delete_files_in_dir(&self.path);
+                let _ = soaringspot::delete_files_in_dir(&self.path);
                 fs::create_dir(format!("{}/analysis", &self.path)).unwrap_or(());
-                file_writer::make_excel_file(&analysis_path, some_calc.get_task(), &self.calculations, date);
+                let _ = file_writer::make_excel_file(&analysis_path, some_calc.get_task(), &self.calculations, date);
                 self.analysis_path = Some(analysis_path);
                 Command::none()
             }

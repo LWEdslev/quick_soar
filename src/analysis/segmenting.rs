@@ -1,5 +1,4 @@
 use std::rc::Rc;
-use igc::util::Time;
 use crate::parser::util::Fix;
 use crate::analysis;
 
