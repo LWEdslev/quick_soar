@@ -6,7 +6,7 @@ use iced::widget::{button, column, container, row, text, text_input};
 use iced::widget::progress_bar;
 use iced::Settings;
 use iced::window::{icon, Position};
-use igc::util::{Date, Time};
+use igc_parser::records::util::{Date, Time};
 use image::ImageFormat;
 use quick_soar::{analysis, parser, PathStrategy};
 use quick_soar::analysis::calculation::Calculation;
@@ -215,7 +215,7 @@ impl Application for AppState {
                 }
 
                 let spot = self.soaringspot.as_ref().expect("unreachable");
-                let date = get_date(contents[0].as_str()).unwrap_or(Date::from_dmy(1, 1, 1));
+                let date = get_date(contents[0].as_str()).unwrap_or(Date { d: 1, m :1, y: 1});
                 let start_times = spot.get_start_times();
                 let speeds = spot.get_speeds();
                 let distances = spot.get_distances();
@@ -248,13 +248,7 @@ impl Application for AppState {
                             let pilot_info = parser::pilot_info::PilotInfo::parse(&content);
                             if let (Some(flight), Ok(pilot_info)) = (flight, pilot_info) {
                                 let time_zone = pilot_info.time_zone;
-
-                                // I have to do stupid shit like this when you don't derive Clone in you APIs!!!
-                                let start_time = match start_time {
-                                    None => None,
-                                    Some(time) => Some(Time::from_hms(time.hours, time.minutes, time.seconds)),
-                                };
-                                let start_time = match start_time { None => None, Some(mut time) => { time.offset(-time_zone); Some(time.seconds_since_midnight()) } };
+                                let start_time = match start_time.map(|s| s.clone()) { None => None, Some(mut time) => { time.offset(-time_zone); Some(time.seconds_since_midnight()) } };
                                 let calculation = Calculation::new(task, flight, pilot_info, start_time, speed, dist);
                                 calculation
                             } else {
@@ -271,10 +265,7 @@ impl Application for AppState {
             Message::PostAnalysis(_) => {
                 self.progress = ProgressState::Finished;
                 let some_calc = self.calculations.first().expect("calculations are empty, this should be unreachable");
-                let date = match self.date {
-                    None => Date::from_dmy(0,0,0),
-                    Some(Date { day, month, year }) => Date::from_dmy(day, month, year),
-                };
+                let date = self.date.clone().unwrap_or(Date { d: 0, m: 0, y: 0});
                 let class: Option<String> = {
                     let url = self.input.clone();
                     let parts = url.split("/").collect::<Vec<&str>>();
@@ -289,7 +280,7 @@ impl Application for AppState {
                         },
                     }
                 };
-                let analysis_path = format!("{}analysis/QS-{}-{}-{}-{}.xlsx", &self.path, class.unwrap_or("".to_string()), date.day, date.month, date.year);
+                let analysis_path = format!("{}analysis/QS-{}-{}-{}-{}.xlsx", &self.path, class.unwrap_or("".to_string()), date.d, date.m, date.y);
                 println!("analysis path is {}", analysis_path);
                 let analysis_path = soaringspot::make_file_name_unique(analysis_path.as_str());
                 println!("analysis path is {}", analysis_path);

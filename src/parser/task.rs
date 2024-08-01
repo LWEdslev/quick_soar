@@ -1,4 +1,4 @@
-use igc::util::{Time};
+use igc_parser::records::util::Time;
 use regex::Regex;
 use crate::parser::util;
 use crate::parser::util::TurnpointRecord;
@@ -247,7 +247,7 @@ mod tests {
         let task = Task::parse(&contents).expect("Failed to parse task");
         let tps = task.points;
         match task.task_type {
-            TaskType::AAT(time) => assert_eq!(time, Time::from_hms(2, 0, 0)),
+            TaskType::AAT(time) => assert_eq!(time, Time::from_hms(2, 0, 0).unwrap()),
             TaskType::AST => assert!(false),
         }
         if let Some(TaskComponent::Start(tp)) = tps.first() {

@@ -1,4 +1,5 @@
-use igc::util::Time;
+use igc_parser::records::util::Time;
+
 use crate::parser::task::Turnpoint;
 use crate::parser::util::Fix;
 
@@ -91,7 +92,6 @@ pub trait Offsetable {
 
 impl Offsetable for Time {
     fn offset(&mut self, offset: i8) {
-        let h = self.hours as i8 + offset;
-        self.hours = if h >= 24 { (h - 24) as u8 } else { h as u8 }
+        self.add_hours(offset as _);
     }
 }

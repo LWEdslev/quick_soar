@@ -1,5 +1,6 @@
 use std::rc::Rc;
-use igc::util::Time;
+use igc_parser::records::util::Time;
+
 use crate::analysis::segmenting::{Flight, Segment};
 use crate::parser::pilot_info::PilotInfo;
 use crate::parser::task::{Task, TaskComponent, TaskType};
@@ -113,7 +114,7 @@ impl Calculation {
             let alt = inner.windows(2).map(|w| {
                 let first = &w[0];
                 let second = &w[1];
-                first.alt - second.alt
+                first.alt_igc - second.alt_igc
             }).sum::<i16>();
             (dist, alt)
         })
@@ -212,7 +213,7 @@ impl Calculation {
             let first = climb.first()?;
             let last = climb.last()?;
             let delta_time = last.timestamp - first.timestamp;
-            let alt_gain = last.alt - first.alt;
+            let alt_gain = last.alt_igc - first.alt_igc;
             Some((alt_gain, delta_time))
         }).collect::<Option<Vec<(i16, u32)>>>()?.into_iter().fold((0, 0), |(alt_acc, time_acc), (alt, time)| (alt_acc + alt, time_acc + time));
         if total_climb_time == 0 {return None};
@@ -224,12 +225,12 @@ impl Calculation {
             TaskPiece::EntireTask => {
                 if self.total_flight.fixes.is_empty() { return None };
                 let time_in_seconds = self.total_flight.fixes[0].timestamp;
-                Some(Time::from_hms((time_in_seconds / 3600) as u8, ((time_in_seconds % 3600) / 60) as u8, (time_in_seconds % 60) as u8))
+                Time::from_hms((time_in_seconds / 3600) as u8, ((time_in_seconds % 3600) / 60) as u8, (time_in_seconds % 60) as u8).ok()
             }
             TaskPiece::Leg(leg_number) => {
                 if self.legs.get(leg_number).is_none() || self.legs.get(leg_number)?.is_none() { return None };
                 let time_in_seconds = self.legs[leg_number].as_ref()?.fixes.first()?.timestamp;
-                Some(Time::from_hms((time_in_seconds / 3600) as u8, ((time_in_seconds % 3600) / 60) as u8, (time_in_seconds % 60) as u8))
+                Time::from_hms((time_in_seconds / 3600) as u8, ((time_in_seconds % 3600) / 60) as u8, (time_in_seconds % 60) as u8).ok()
             }
         }
     }
@@ -241,7 +242,7 @@ impl Calculation {
         };
 
         let time_in_seconds = flight?.fixes.last()?.timestamp;
-        Some(Time::from_hms((time_in_seconds / 3600) as u8, ((time_in_seconds % 3600) / 60) as u8, (time_in_seconds % 60) as u8))
+        Time::from_hms((time_in_seconds / 3600) as u8, ((time_in_seconds % 3600) / 60) as u8, (time_in_seconds % 60) as u8).ok()
     }
 
     pub fn start_alt(&self, task_piece: TaskPiece) -> Option<Meters> {
@@ -326,12 +327,12 @@ impl Calculation {
             let alt_gain = inner.windows(2).map(|w| {
                 let curr = &w[0];
                 let next = &w[1];
-                (next.alt - curr.alt).max(0)
+                (next.alt_igc - curr.alt_igc).max(0)
             }).sum::<Meters>();
             let alt_loss = inner.windows(2).map(|w| {
                 let curr = &w[0];
                 let next = &w[1];
-                (curr.alt - next.alt).max(0)
+                (curr.alt_igc - next.alt_igc).max(0)
             }).sum::<Meters>();
 
             (alt_gain, alt_loss)

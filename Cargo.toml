@@ -7,7 +7,6 @@ edition = "2021"
 strip = true
 
 [dependencies]
-igc = "0.2.2"
 regex = "1.7.1"
 table-extract = "0.2.2"
 reqwest = "0.11.16"
@@ -21,4 +20,4 @@ iced = { version = "0.10.0", features = ["tokio", "image"] }
 iced_native = "0.10.3"
 image = "0.24.6"
 thiserror = "1.0.44"
-
+igc_parser = { git = "https://github.com/LWEdslev/igc_parser", rev = "43c0b1b"}

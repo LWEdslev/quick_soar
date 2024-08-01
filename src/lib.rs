@@ -23,25 +23,9 @@ impl PathStrategy {
     }
 
     pub fn get_path(&self) -> String {
-        match self {
-            PathStrategy::Linux => {
-                match home::home_dir() {
-                    Some(path) => path.to_str().expect("unreachable").to_string() + &*"/.quicksoar/",
-                    None => panic!("no home directory found"),
-                }
-            }
-            PathStrategy::Windows => {
-                match home::home_dir() {
-                    Some(path) => path.to_str().expect("unreachable").to_string() + &*"/.quicksoar/",
-                    None => panic!("no home directory found"),
-                }
-            }
-            PathStrategy::MacOS => {
-                match home::home_dir() {
-                    Some(path) => path.to_str().expect("unreachable").to_string() + &*"/.quicksoar/",
-                    None => panic!("no home directory found"),
-                }
-            }
+        match home::home_dir() {
+            Some(path) => path.to_str().expect("unreachable").to_string() + &*"/.quicksoar/",
+            None => panic!("no home directory found"),
         }
     }
 }

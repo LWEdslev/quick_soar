@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::{fs, io};
 use std::error::Error;
-use igc::util::Time;
+use igc_parser::records::util::Time;
 use table_extract::Table;
 
 type Kph = f32;
@@ -53,7 +53,7 @@ impl SoaringSpot {
             let time_string = row.get("Start")?.trim().to_string().split(':').map(|s| s.to_string()).collect::<Vec<String>>();
             if time_string.len() != 3 { return None }
             let (h, m, s) = (time_string[0].parse().ok()?, time_string[1].parse().ok()?, time_string[2].parse().ok()?);
-            Some(Time::from_hms(h, m, s))
+            Time::from_hms(h, m, s).ok()
         }).collect::<Vec<Option<Time>>>()
     }
 

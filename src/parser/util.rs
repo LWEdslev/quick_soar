@@ -1,32 +1,31 @@
 use std::{error::Error, fs::File, io::Read};
 use std::str::FromStr;
-use igc::{records::{BRecord, CRecordTurnpoint, Record}, util::{Compass, RawPosition, Time}};
-use igc::records::{FixValid};
-use igc::util::{Date, ParseError};
+use igc_parser::error::IGCError;
+use igc_parser::records::task_info::TaskInfo;
+use igc_parser::records::util::{Coordinate, Date, Time};
+use igc_parser::records::Record;
 use regex::Regex;
+use igc_parser::records::fix::Fix as ParserFix;
 
 #[derive(Clone)]
 pub struct Fix {
     pub timestamp: u32,
     pub latitude: f32, //positive is north
     pub longitude: f32, //positive is east
-    pub alt: i16,
+    pub alt: Option<i16>,
     pub alt_igc: i16,
-    valid: bool,
 }
 
 impl Fix {
-    pub fn from(rec: &BRecord) -> Self {
-        let (lat, lon) = raw_position_to_decimals(&rec.pos);
+    pub fn from(rec: &ParserFix) -> Self {
+        let (lat, lon) = coordinates_to_decimals(&rec.coordinates);
         let time = &rec.timestamp;
-        let (h,m,s) = (time.hours, time.minutes, time.seconds);
         Self {
-            timestamp: Time::from_hms(h,m,s).seconds_since_midnight(),
+            timestamp: time.seconds_since_midnight(),
             latitude: lat,
             longitude: lon,
             alt: rec.gps_alt,
             alt_igc: rec.pressure_alt,
-            valid: rec.fix_valid == FixValid::Valid
         }
     }
     pub fn to_string(&self) -> String {
@@ -36,11 +35,11 @@ impl Fix {
                 self.timestamp % 60,
                 self.latitude,
                 self.longitude,
-                self.alt)
+                self.alt_igc)
     }
 
     pub(crate) fn is_valid(&self) -> bool {
-        self.valid
+        self.alt.is_some()
     }
 }
 
@@ -51,9 +50,9 @@ pub struct TurnpointRecord {
 }
 
 impl TurnpointRecord {
-    pub(crate) fn from_c_record_tp(rec: &CRecordTurnpoint) -> Self {
-        let (latitude, longitude) = raw_position_to_decimals(&rec.position);
-        let name = rec.turnpoint_name.map(|s| s.to_string());
+    pub(crate) fn from_c_record_tp(rec: &igc_parser::records::task_info::TaskPoint) -> Self {
+        let (latitude, longitude) = coordinates_to_decimals(&rec.coordinate);
+        let name = rec.name.clone().map(|s| s.to_string());
         Self {
             latitude,
             longitude,
@@ -83,7 +82,7 @@ fn map_parsed_contents<F,T>(contents: &str, f: F) -> T
 {
     let records: Vec<Record> = contents.lines().filter(|line| !line.is_empty()).filter_map(
         |line| {
-            match Record::parse_line(line) {
+            match Record::parse(line) {
                 Ok(rec) => Some(rec),
                 Err(_) => None,
             }
@@ -105,7 +104,7 @@ pub fn get_fixes(contents: &str) -> Vec<Fix> {
 fn get_l_records_strings(contents: String) -> Vec<String> {
     let f = |records: &Vec<Record>| records.iter().filter_map( |record|
         match record {
-            Record::L(lrecord) => Some("L".to_string() + lrecord.log_string), //add the L again
+            Record::L(lrecord) => Some("L".to_string() + &lrecord.content), //add the L again
             _ => None,
         }
     ).collect::<Vec<String>>();
@@ -117,9 +116,9 @@ pub fn get_turnpoint_locations(contents: &str) -> Vec<TurnpointRecord> {
     fn get_turnpoints_from_l_records(tp_strings: Vec<String>) -> Vec<TurnpointRecord>{
         tp_strings
             .iter()
-            .filter_map(|tp| match Record::parse_line(tp) {
+            .filter_map(|tp| match Record::parse(tp) {
                 Ok(record) => match record {
-                    Record::CTurnpoint(c) => Some(TurnpointRecord::from_c_record_tp(&c)),
+                    Record::C(TaskInfo::TaskPoint(c)) => Some(TurnpointRecord::from_c_record_tp(&c)),
                     _ => None,
                 },
                 Err(_) => None,
@@ -140,8 +139,8 @@ pub fn get_task_time(contents: &str) -> Option<Time> {
     let f = |records: &Vec<Record>| records.iter().filter_map( |record|
         match record {
             Record::L(lrecord) =>
-                if lrecord.log_string.starts_with("SEEYOU TSK") {
-                    Some("L".to_string() + lrecord.log_string)
+                if lrecord.content.starts_with("SEEYOU TSK") {
+                    Some("L".to_string() + &lrecord.content)
                 } else {
                     None
                 },
@@ -159,7 +158,7 @@ pub fn get_task_time(contents: &str) -> Option<Time> {
                 Some(matc) => {
                     let time_string = &s[matc.start()+"TaskTime=".len() .. matc.end()].to_string();
                     Some(
-                        Time::from_str(&time_string.replacen(':', "", 3)).ok()?
+                        Time::parse(&time_string.replacen(':', "", 3)).ok()?
                     )
                 },
             }
@@ -172,8 +171,8 @@ pub fn get_turnpoint_descriptions(contents: &str) -> Vec<String> {
     let f = |records: &Vec<Record>| records.iter().filter_map( |record|
         match record {
             Record::L(lrecord) =>
-                if lrecord.log_string.starts_with("SEEYOU OZ=") {
-                    Some("L".to_string() + lrecord.log_string)
+                if lrecord.content.starts_with("SEEYOU OZ=") {
+                    Some("L".to_string() + &lrecord.content)
                 } else {
                     None
                 },
@@ -182,32 +181,30 @@ pub fn get_turnpoint_descriptions(contents: &str) -> Vec<String> {
     map_parsed_contents(contents, f)
 }
 
-pub fn get_date(contents: &str) -> Result<Date, ParseError> {
+pub fn get_date(contents: &str) -> Result<Date, IGCError> {
     //If just people used the correct formatting this would be simple!!!
     let hfdte_rec = contents.lines().find(|line| line.starts_with("HFDTE")).unwrap_or("HFDTE999999");
     let first_number = match hfdte_rec.chars().position(|c| c.is_numeric()) {
         Some(i) => i,
-        None => return Err(ParseError::SyntaxError),
+        None => return Err(IGCError::DateInitError("No numbers in HFDTE".to_string())),
     };
     Date::parse(&hfdte_rec[first_number..first_number + 6])
 }
 
 type Lat = f32;
 type Lon = f32;
-fn raw_position_to_decimals(rp: &RawPosition) -> (Lat, Lon) {
-    let lon = rp.lon.0;
-    let lat = rp.lat.0;
-    let (lat, lon) = (lat.degrees as f32 + (lat.minute_thousandths as f32 / 1000.) / 60.,
-                      lon.degrees as f32 + (lon.minute_thousandths as f32 / 1000.) / 60.);
-    let lat = match rp.lat.0.sign {
-        Compass::North => lat,
-        Compass::South => -1. * lat,
-        _ => panic!("latitude was neither north nor south")
+fn coordinates_to_decimals(rp: &Coordinate) -> (Lat, Lon) {
+    let lon = &rp.longitude;
+    let lat = &rp.latitude;
+    let (lat, lon) = (lat.degrees as f32 + (lat.minutes as f32) / 60.,
+                      lon.degrees as f32 + (lon.minutes as f32) / 60.);
+    let lat = match rp.latitude.is_north {
+        true => lat,
+        false => -1. * lat,
     };
-    let lon = match rp.lon.0.sign {
-        Compass::East => lon,
-        Compass::West => -1. * lon,
-        _ => panic!("longitude was neither east nor west")
+    let lon = match rp.longitude.is_east {
+        true => lon,
+        false => -1. * lon,
     };
     (lat, lon)
 }
@@ -218,12 +215,12 @@ mod tests {
 
     #[test]
     fn fix_should_be_parsed_correctly() {
-        if let Ok(Record::B(brecord)) = Record::parse_line("B0941425152178N00032755WA001130014900854107587076372190033802770100") {
+        if let Ok(Record::B(brecord)) = Record::parse("B0941425152178N00032755WA001130014900854107587076372190033802770100") {
             let fix = Fix::from(&brecord);
             assert_eq!(fix.alt, brecord.gps_alt);
             assert_eq!(fix.latitude, 51.869633);
             assert_eq!(fix.longitude, -0.5459167);
-            assert_eq!(fix.timestamp, Time::from_hms(9, 41, 42).seconds_since_midnight());
+            assert_eq!(fix.timestamp, Time::from_hms(9, 41, 42).unwrap().seconds_since_midnight());
         } else {
             assert!(false)
         };
@@ -232,7 +229,7 @@ mod tests {
     #[test]
     fn getting_time() {
         if let Some(time) = get_task_time("LSEEYOU TSK,NoStart=12:57:00,TaskTime=02:00:00,WpDis=False") {
-            assert_eq!(time, Time::from_hms(2, 0, 0))
+            assert_eq!(time, Time::from_hms(2, 0, 0).unwrap())
         } else {
             assert!(false)
         }
