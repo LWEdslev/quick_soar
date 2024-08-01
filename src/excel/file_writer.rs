@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
 use crate::analysis::calculation::{Calculation, TaskPiece};
-use crate::parser::task::Task;
-use umya_spreadsheet::*;
 use crate::analysis::util::Offsetable;
+use crate::parser::task::Task;
+use igc_parser::records::util::Date;
+use umya_spreadsheet::*;
 use enum_iterator::{all, Sequence};
-use igc::util::Date;
 use umya_spreadsheet::helper::coordinate::CellCoordinates;
 use thiserror::Error;
 
@@ -26,7 +26,7 @@ pub fn make_excel_file(path: &str, task: &Task, data: &Vec<Calculation>, date: D
     let path = std::path::Path::new(path);
     fs::remove_file(path).unwrap_or(()); //remove if present
     let mut book = new_file();
-    let date_string = format!("{}-{}-{}", date.day, date.month, date.year);
+    let date_string = format!("{}-{}-{}", date.d, date.m, date.y);
     let entire_flight = match book.new_sheet("Entire flight") {
         Ok(ws) => ws,
         Err(_) => return Err(ExcelError::Excel),
@@ -266,7 +266,7 @@ impl ColumnHeader {
                         None => CellValue::None,
                         Some(mut start_time) => {
                             start_time.offset(utc_offset);
-                            CellValue::String(format!("{:0>2}:{:0>2}:{:0>2}", start_time.hours, start_time.minutes, start_time.seconds))
+                            CellValue::String(format!("{:0>2}:{:0>2}:{:0>2}", start_time.h, start_time.m, start_time.s))
                         }
                     }
                 }).collect::<Vec<CellValue>>()
@@ -280,7 +280,7 @@ impl ColumnHeader {
                         None => CellValue::None,
                         Some(mut finish_time) => {
                             finish_time.offset(utc_offset);
-                            CellValue::String(format!("{:0>2}:{:0>2}:{:0>2}", finish_time.hours, finish_time.minutes, finish_time.seconds))
+                            CellValue::String(format!("{:0>2}:{:0>2}:{:0>2}", finish_time.h, finish_time.m, finish_time.s))
                         }
                     }
                 }).collect::<Vec<CellValue>>()
